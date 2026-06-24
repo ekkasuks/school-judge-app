@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ประกาศผล - โรงเรียนบ้านใหม่</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ===== Confetti ===== */
+    .confetti-stage {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .confetti {
+      position: absolute;
+      top: -20px;
+      width: 8px;
+      height: 14px;
+      opacity: 0;
+      animation: confetti-fall linear infinite;
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translateY(-40px) rotate(0deg);   opacity: 0; }
+      8%   { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ===== Fade in cards ===== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: reveal-in 600ms ease-out forwards;
+    }
+    @keyframes reveal-in {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* hero gradient */
+    .hero-card {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fbcfe8 100%);
+    }
+  </style>
+</head>
+<body class="relative min-h-screen bg-gradient-to-b from-emerald-50 via-amber-50 to-rose-50 font-sans">
+
+  <!-- ============ LOADING ============ -->
+  <section id="state-loading" class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+    <div class="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+    <p class="mt-4 text-sm text-slate-500">กำลังโหลดผล...</p>
+  </section>
+
+  <!-- ============ NOT PUBLISHED ============ -->
+  <section id="state-pending" hidden class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+    <div class="text-7xl">🤫</div>
+    <h1 class="mt-4 text-2xl font-bold text-slate-800">ยังไม่ประกาศผล</h1>
+    <p class="mt-2 max-w-sm text-base text-slate-600">โปรดติดตามการประกาศผลในช่วงพิธีปิดงาน</p>
+    <p class="mt-6 text-xs text-slate-400">หน้านี้จะรีเฟรชอัตโนมัติทุก 10 วินาที</p>
+    <a href="index.html" class="mt-6 text-sm text-emerald-700 underline">← กลับหน้าแรก</a>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="state-results" hidden class="relative z-10 mx-auto max-w-3xl px-4 pb-16 pt-8">
+    <header class="mb-8 text-center">
+      <div class="text-5xl">🎉</div>
+      <h1 class="mt-2 text-2xl font-extrabold text-emerald-800 sm:text-3xl">ประกาศผลการประกวด</h1>
+      <p id="event-name" class="mt-1 text-sm text-slate-600 sm:text-base">การประกวดชุดต่อต้านยาเสพติด</p>
+      <p class="mt-1 text-xs text-slate-500">โรงเรียนบ้านใหม่</p>
+    </header>
+
+    <!-- Round 1 Hero -->
+    <section id="r1-section" class="mb-10"></section>
+
+    <!-- Round 2 Grid -->
+    <section id="r2-section"></section>
+
+    <footer class="mt-12 text-center text-xs text-slate-400">
+      ขอแสดงความยินดีกับทุกทีม 👏
+    </footer>
+  </section>
+
+  <!-- Confetti stage (สร้างผ่าน JS) -->
+  <div id="confetti-stage" class="confetti-stage" hidden></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/results.js"></script>
+</body>
+</html>

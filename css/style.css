@@ -1,0 +1,34 @@
+/* style.css — เสริม Tailwind สำหรับสิ่งที่ utility class ครอบไม่ถึง */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Sarabun', system-ui, sans-serif;
+}
+
+/* hide scrollbar on horizontal tab strip */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* QR code container — center img */
+.qr-box img { margin: 0 auto; display: block; }
+
+/* progress bar inner transition */
+.progress-fill {
+  transition: width 400ms ease-out;
+}
+
+/* tab active state */
+.tab-active {
+  color: rgb(5 150 105); /* emerald-600 */
+  border-color: rgb(5 150 105);
+  background-color: rgb(236 253 245); /* emerald-50 */
+}
+
+/* drag handle cursor */
+.drag-handle { cursor: grab; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.3; }
+.sortable-chosen { background-color: rgb(240 253 244); }

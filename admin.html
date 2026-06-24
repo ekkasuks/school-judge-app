@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ผู้ดูแลระบบ - ระบบตัดสินการประกวด</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-50 font-sans">
+
+  <!-- ============ LOGIN SCREEN ============ -->
+  <section id="login-screen" class="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center px-6">
+    <div class="mb-6 text-center">
+      <div class="mb-2 text-5xl">🛠</div>
+      <h1 class="text-xl font-bold text-slate-800">เข้าสู่ระบบ Admin</h1>
+      <p class="mt-1 text-xs text-slate-500">โรงเรียนบ้านใหม่</p>
+    </div>
+    <form id="login-form" class="w-full space-y-3 rounded-2xl bg-white p-5 shadow-lg">
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">รหัสผ่าน</span>
+        <input id="login-password" type="password" autocomplete="current-password"
+               class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+               required />
+      </label>
+      <button type="submit"
+              class="w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow active:scale-95">
+        เข้าสู่ระบบ
+      </button>
+    </form>
+    <a href="index.html" class="mt-4 text-sm text-slate-500">← กลับหน้าแรก</a>
+  </section>
+
+  <!-- ============ APP SCREEN ============ -->
+  <section id="app-screen" hidden>
+    <header class="sticky top-0 z-30 bg-white shadow-sm">
+      <div class="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+        <div>
+          <h1 id="event-name" class="text-base font-bold text-slate-800 leading-tight">การประกวด...</h1>
+          <p class="text-xs text-slate-500">Admin Panel</p>
+        </div>
+        <button id="logout-btn" class="rounded-lg px-3 py-2 text-sm text-rose-600">ออกจากระบบ</button>
+      </div>
+      <nav class="no-scrollbar overflow-x-auto border-t border-slate-100">
+        <div class="mx-auto flex max-w-4xl gap-1 px-2">
+          <button data-tab="dashboard" class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">📊 Dashboard</button>
+          <button data-tab="teams"     class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">👥 ทีม</button>
+          <button data-tab="judges"    class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">👨‍⚖️ กรรมการ</button>
+          <button data-tab="controls"  class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">🎛 ควบคุมรอบ</button>
+          <button data-tab="results"   class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">🏆 ผลคะแนน</button>
+          <button data-tab="export"    class="tab-btn whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600">📤 Export</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="mx-auto max-w-4xl px-4 py-4">
+
+      <!-- DASHBOARD -->
+      <section id="tab-dashboard" class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-white p-4 shadow-sm">
+            <div class="text-xs text-slate-500">จำนวนทีม</div>
+            <div class="mt-1 text-2xl font-bold text-slate-800"><span id="stat-teams">–</span></div>
+            <div class="mt-1 text-xs text-slate-400">เข้าแข่ง <span id="stat-active-teams">–</span> ทีม</div>
+          </div>
+          <div class="rounded-2xl bg-white p-4 shadow-sm">
+            <div class="text-xs text-slate-500">กรรมการ</div>
+            <div class="mt-1 text-2xl font-bold text-slate-800"><span id="stat-judges">–</span></div>
+            <div class="mt-1 text-xs text-slate-400">รอบ 1: <span id="stat-r1-judges">–</span> | รอบ 2: <span id="stat-r2-judges">–</span></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="mb-2 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-700">รอบที่ 1 — น่ารักจนกรรมการใจละลาย</h2>
+            <span id="stat-r1-state" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs"></span>
+          </div>
+          <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div id="r1-bar" class="progress-fill h-full bg-emerald-500" style="width: 0%"></div>
+          </div>
+          <p class="mt-2 text-xs text-slate-500"><span id="r1-text">0/0</span> กรรมการลงคะแนนแล้ว</p>
+        </div>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="mb-2 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-700">รอบที่ 2 — รางวัล 6 ประเภท</h2>
+            <span id="stat-r2-state" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs"></span>
+          </div>
+          <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div id="r2-bar" class="progress-fill h-full bg-sky-500" style="width: 0%"></div>
+          </div>
+          <p class="mt-2 text-xs text-slate-500"><span id="r2-text">0/0</span> กรรมการลงคะแนนแล้ว</p>
+        </div>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <h2 class="mb-2 text-sm font-semibold text-slate-700">สถานะระบบ</h2>
+          <ul class="space-y-1 text-sm text-slate-600">
+            <li>รอบ 1 เปิดลงคะแนน: <span id="state-r1-open" class="font-semibold"></span></li>
+            <li>รอบ 2 เปิดลงคะแนน: <span id="state-r2-open" class="font-semibold"></span></li>
+            <li>ประกาศผลสาธารณะ: <span id="state-published" class="font-semibold"></span></li>
+          </ul>
+          <p class="mt-2 text-xs text-slate-400">อัปเดตอัตโนมัติทุก 5 วินาที</p>
+        </div>
+      </section>
+
+      <!-- TEAMS -->
+      <section id="tab-teams" hidden class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-800">จัดการทีม</h2>
+          <button id="add-team-btn" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">+ เพิ่มทีม</button>
+        </div>
+        <p class="text-xs text-slate-500">ลากการ์ดเพื่อเปลี่ยนลำดับ</p>
+        <ul id="teams-list" class="space-y-2"></ul>
+      </section>
+
+      <!-- JUDGES -->
+      <section id="tab-judges" hidden class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-800">จัดการกรรมการ</h2>
+          <button id="add-judge-btn" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">+ เพิ่มกรรมการ</button>
+        </div>
+        <div class="rounded-xl bg-white p-3 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-700">รอบที่ 1 (3 คน)</h3>
+          <ul id="judges-r1" class="mt-2 space-y-2"></ul>
+        </div>
+        <div class="rounded-xl bg-white p-3 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-700">รอบที่ 2 (7 คน)</h3>
+          <ul id="judges-r2" class="mt-2 space-y-2"></ul>
+        </div>
+      </section>
+
+      <!-- CONTROLS -->
+      <section id="tab-controls" hidden class="space-y-3">
+        <h2 class="text-base font-semibold text-slate-800">ควบคุมรอบการแข่งขัน</h2>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-slate-800">เปิดลงคะแนนรอบที่ 1</div>
+              <p class="text-xs text-slate-500">เมื่อเปิด กรรมการรอบ 1 จะลงคะแนนได้</p>
+            </div>
+            <button data-toggle="round1Open" class="toggle-btn relative h-8 w-14 shrink-0 rounded-full bg-slate-300 transition-colors" aria-pressed="false">
+              <span class="absolute left-1 top-1 block h-6 w-6 rounded-full bg-white shadow transition-transform"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-slate-800">เปิดลงคะแนนรอบที่ 2</div>
+              <p class="text-xs text-slate-500">ปิดรอบ 1 และคำนวณผู้ชนะก่อน</p>
+            </div>
+            <button data-toggle="round2Open" class="toggle-btn relative h-8 w-14 shrink-0 rounded-full bg-slate-300 transition-colors" aria-pressed="false">
+              <span class="absolute left-1 top-1 block h-6 w-6 rounded-full bg-white shadow transition-transform"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-slate-800">ประกาศผลสาธารณะ</div>
+              <p class="text-xs text-slate-500">เปิดเมื่อพร้อมเผยแพร่หน้าผลให้ทุกคนเห็น</p>
+            </div>
+            <button data-toggle="resultsPublished" class="toggle-btn relative h-8 w-14 shrink-0 rounded-full bg-slate-300 transition-colors" aria-pressed="false">
+              <span class="absolute left-1 top-1 block h-6 w-6 rounded-full bg-white shadow transition-transform"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">
+          ⚠️ ฟังก์ชัน <strong>คำนวณรอบที่ 1</strong> และ <strong>คำนวณรอบที่ 2</strong> จะอยู่ในแท็บ "ผลคะแนน"
+          และพร้อมใช้งานใน Step 5 / Step 7
+        </div>
+      </section>
+
+      <!-- RESULTS -->
+      <section id="tab-results" hidden class="space-y-4">
+        <h2 class="text-base font-semibold text-slate-800">ผลคะแนน</h2>
+
+        <!-- ROUND 1 -->
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-emerald-700">รอบที่ 1 — น่ารักจนกรรมการใจละลาย</h3>
+            <span id="r1-status-badge" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs"></span>
+          </div>
+          <div id="r1-saved" class="hidden"></div>
+          <div id="r1-preview" class="hidden"></div>
+          <div id="r1-actions" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- ROUND 2 -->
+        <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-sky-700">รอบที่ 2 — รางวัล 6 ประเภท</h3>
+            <span id="r2-status-badge" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs"></span>
+          </div>
+          <div id="r2-saved" class="hidden"></div>
+          <div id="r2-preview" class="hidden"></div>
+          <div id="r2-actions" class="flex flex-wrap gap-2"></div>
+        </div>
+      </section>
+
+      <!-- EXPORT -->
+      <section id="tab-export" hidden class="space-y-3">
+        <h2 class="text-base font-semibold text-slate-800">Export ข้อมูล</h2>
+        <div class="rounded-2xl bg-white p-5 shadow-sm space-y-3">
+          <button id="export-pdf-btn"
+                  class="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow active:scale-95">
+            📄 Export PDF — สรุปผลการประกวด
+          </button>
+          <p class="text-xs text-slate-500">
+            ออกเป็นไฟล์ PDF 4 หน้า: ปก, สรุปผู้ได้รับรางวัล, ตารางคะแนนรอบ 1, ตารางคะแนนรอบ 2
+          </p>
+          <hr class="my-1 border-slate-100">
+          <button id="export-xlsx-btn"
+                  class="w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white shadow active:scale-95">
+            📊 Export Excel — ข้อมูลทุกชีต
+          </button>
+          <p class="text-xs text-slate-500">
+            ออกเป็นไฟล์ .xlsx 5 ชีต: สรุปผลรางวัล, คะแนนรอบ 1, คะแนนรอบ 2, กรรมการ, ทีม
+          </p>
+        </div>
+      </section>
+
+    </main>
+  </section>
+
+  <!-- ============ TEAM FORM MODAL ============ -->
+  <div id="team-modal" hidden class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <h3 id="team-modal-title" class="text-base font-bold text-slate-800">เพิ่มทีม</h3>
+      <form id="team-form" class="mt-4 space-y-3">
+        <input type="hidden" id="team-id" />
+        <input type="hidden" id="team-image-url" />
+        <input type="hidden" id="team-image-fileid" />
+
+        <label class="block">
+          <span class="text-sm text-slate-700">หมายเลขทีม</span>
+          <input id="team-number" type="number" min="1" required class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base" />
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-700">ชื่อทีม</span>
+          <input id="team-name" required class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base" />
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-700">โรงเรียน</span>
+          <input id="team-school" class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base" />
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-700">รูปภาพ</span>
+          <input id="team-image-file" type="file" accept="image/*" class="mt-1 block w-full text-sm" />
+          <div id="team-image-preview" class="mt-2 hidden">
+            <img class="h-32 w-full rounded-xl object-cover" />
+          </div>
+        </label>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="team-modal-cancel" class="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm">ยกเลิก</button>
+          <button type="submit" class="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ JUDGE FORM MODAL ============ -->
+  <div id="judge-modal" hidden class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <h3 class="text-base font-bold text-slate-800">เพิ่มกรรมการ</h3>
+      <form id="judge-form" class="mt-4 space-y-3">
+        <input type="hidden" id="judge-id" />
+        <label class="block">
+          <span class="text-sm text-slate-700">ชื่อกรรมการ</span>
+          <input id="judge-name" required class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base" />
+        </label>
+        <label class="block">
+          <span class="text-sm text-slate-700">รอบ</span>
+          <select id="judge-round" class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base">
+            <option value="1">รอบที่ 1</option>
+            <option value="2">รอบที่ 2</option>
+          </select>
+        </label>
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="judge-modal-cancel" class="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm">ยกเลิก</button>
+          <button type="submit" class="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ QR / LINK MODAL ============ -->
+  <div id="link-modal" hidden class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+      <h3 class="text-base font-bold text-slate-800">ลิงก์กรรมการ</h3>
+      <p id="link-judge-name" class="mt-1 text-sm text-slate-500"></p>
+      <div id="link-qr" class="qr-box my-4"></div>
+      <div class="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 break-all" id="link-url"></div>
+      <div class="mt-4 flex gap-2">
+        <button id="link-copy" class="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">📋 คัดลอกลิงก์</button>
+        <button id="link-close" class="rounded-xl border border-slate-300 px-4 py-3 text-sm">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TIE-BREAK MODAL (Round 1) ============ -->
+  <div id="tie-modal" hidden class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <h3 class="text-base font-bold text-slate-800">⚖️ คะแนนเสมอกัน</h3>
+      <p class="mt-1 text-sm text-slate-600">เกณฑ์ tiebreak ทั้งหมดเสมอ — กรุณาเลือกผู้ชนะ</p>
+      <ul id="tie-options" class="my-4 space-y-2"></ul>
+      <label class="block">
+        <span class="text-xs text-slate-500">บันทึกเหตุผล (ไม่บังคับ)</span>
+        <input id="tie-note" type="text" class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+      </label>
+      <div class="mt-4 flex gap-2">
+        <button id="tie-cancel" class="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm">ยกเลิก</button>
+        <button id="tie-confirm" class="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">ยืนยันผู้ชนะ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/export-pdf.js"></script>
+  <script src="js/export-xlsx.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
