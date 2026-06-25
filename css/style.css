@@ -1,5 +1,8 @@
 /* style.css — เสริม Tailwind สำหรับสิ่งที่ utility class ครอบไม่ถึง */
 
+/* fix: HTML hidden attribute ต้องชนะ Tailwind display utilities (flex/block/grid) */
+[hidden] { display: none !important; }
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
