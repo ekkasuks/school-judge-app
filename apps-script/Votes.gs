@@ -36,12 +36,15 @@ function submitVote(payload) {
   }
 
   const seenAwards = new Set();
+  const seenTeams = new Set();
   for (const v of votes) {
     if (!v || !v.awardId || !v.teamId) throw new Error('ข้อมูลโหวตไม่ครบ');
     if (!awardIds.has(v.awardId)) throw new Error('ไม่พบรางวัล: ' + v.awardId);
     if (!teamIds.has(v.teamId)) throw new Error('ไม่พบทีม: ' + v.teamId);
     if (seenAwards.has(v.awardId)) throw new Error('รางวัลซ้ำ: ' + v.awardId);
+    if (seenTeams.has(v.teamId)) throw new Error('ทีมซ้ำ: ' + v.teamId + ' — 1 กรรมการเลือก 1 ทีม ต่อ 1 รางวัล');
     seenAwards.add(v.awardId);
+    seenTeams.add(v.teamId);
   }
 
   return withLock_(() => {

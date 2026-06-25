@@ -99,9 +99,9 @@
 | D | `TeamID` | string | ✓ | `T02` | FK → Teams |
 | E | `SubmittedAt` | datetime | ✓ | | |
 
-**Unique constraint:** `(JudgeID, AwardID)` — 1 กรรมการ เลือก 1 ทีม ต่อ 1 รางวัล
-
-> ⚠️ 1 กรรมการ **อาจเลือกทีมเดียวกันให้หลายรางวัลได้** (เป็นการ "โหวต" ไม่ใช่ "assign")
+**Unique constraint:** `(JudgeID, AwardID)` และ `(JudgeID, TeamID)`
+— กรรมการ 1 คน เลือก **1 ทีม ต่อ 1 รางวัล** และ **1 ทีม ไม่ซ้ำกันในทั้ง 6 รางวัล**
+(bijection ระหว่างทีม↔รางวัล ในมุมมองของกรรมการแต่ละคน)
 
 ---
 

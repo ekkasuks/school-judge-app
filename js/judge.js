@@ -269,8 +269,17 @@ function renderVoteCurrent() {
   $('#vote-award-num').textContent = idx + 1;
   $('#vote-award-name').textContent = award.AwardName;
 
+  // ทีมที่ถูกใช้ในรางวัล "อื่น" → ซ่อนไม่ให้เลือกซ้ำ
+  // (ทีมที่ถูกเลือกในรางวัลปัจจุบัน ยังคงแสดงเพื่อให้เห็น selection)
+  const usedInOthers = new Set();
+  Object.keys(jstate.vote.votes).forEach(aid => {
+    const tid = jstate.vote.votes[aid];
+    if (aid !== award.AwardID && tid) usedInOthers.add(tid);
+  });
+  const availableTeams = teams.filter(t => !usedInOthers.has(t.TeamID));
+
   // list ทีม
-  $('#vote-teams').innerHTML = teams.map(t => `
+  $('#vote-teams').innerHTML = availableTeams.map(t => `
     <li>
       <label class="flex items-center gap-3 rounded-2xl border-2 px-3 py-3 cursor-pointer active:scale-[0.99]
                     ${picked === t.TeamID ? 'border-sky-500 bg-sky-50' : 'border-slate-200 bg-white'}">
@@ -392,6 +401,19 @@ async function submitVote() {
       renderVoteCurrent();
       return;
     }
+  }
+  // verify ไม่มีทีมซ้ำ (safety net — frontend filter ไม่ควรปล่อยให้ถึงตรงนี้)
+  const seenTeams = new Set();
+  for (const a of awards) {
+    const tid = jstate.vote.votes[a.AwardID];
+    if (seenTeams.has(tid)) {
+      showToast(`มีทีมซ้ำ — โปรดเลือกใหม่ในรางวัล "${a.AwardName}"`, 'warning');
+      jstate.vote.awardIndex = awards.indexOf(a);
+      jstate.vote.reviewing = false;
+      renderVoteCurrent();
+      return;
+    }
+    seenTeams.add(tid);
   }
 
   const ok = await confirmDialog(
