@@ -4,6 +4,6 @@
  * ใส่ Web App URL ที่ได้จาก Apps Script deployment
  * (Deploy → New deployment → Web app → copy URL)
  */
-const API_URL = 'https://script.google.com/macros/s/AKfycbyWWrLUmEmSLkO7f5NdVpNINEGH3E0PF3LG1LABm0pLP3ctsht2W9_b4pcVWfvfoaX_/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbweqJeiMohxKQTLVCY6VrAn5sllqCmLScTHbIKERJ4UKd-unVRfIgtq8Cz0iJN2GfoXxw/exec';
 
 const APP_VERSION = '1.0.0';
