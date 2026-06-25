@@ -1,6 +1,14 @@
 /**
- * Auth.gs — Admin login, judge token validation, session cleanup
+ * Auth.gs — Admin login + session, Judge listing + context (V2)
+ *
+ * V2: ลบ judge token system ทิ้ง — กรรมการเลือกชื่อตัวเองในแอป
+ *     identity เก็บใน localStorage ฝั่ง client
+ *     server กัน double-submit ที่ `Voted` flag ภายใน LockService
  */
+
+/* ====================================================================
+ * ADMIN
+ * ==================================================================== */
 
 function adminLogin(payload) {
   const password = payload.password;
@@ -37,56 +45,72 @@ function validateAdmin_(token) {
   return true;
 }
 
-function validateJudgeToken_(token) {
-  if (!token) throw new Error('ไม่พบ token');
-  const judge = getAllRows_('Judges').find(j =>
-    String(j.Token) === String(token) && toBool_(j.Active)
-  );
-  if (!judge) throw new Error('Token กรรมการไม่ถูกต้องหรือถูกยกเลิก');
-  return judge;
-}
-
 function cleanExpiredSessions_() {
   const sheet = getSheet_('Sessions');
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return;
   const now = new Date();
   for (let i = values.length - 1; i >= 1; i--) {
-    const exp = values[i][3]; // col D = ExpiresAt
+    const exp = values[i][3];
     if (exp && new Date(exp) < now) sheet.deleteRow(i + 1);
   }
 }
 
+/* ====================================================================
+ * JUDGE — PUBLIC ENDPOINTS
+ * ==================================================================== */
+
 /**
- * getJudgeContext — judge เปิดลิงก์ → ส่ง token มา → ได้ข้อมูลทุกอย่างที่ใช้ render หน้า vote
+ * getJudgesList — public, ไม่ต้องมี token
+ *   ส่งรายชื่อกรรมการ + flag ว่าโหวตแล้วหรือยัง
+ *   ใช้ในหน้า "เลือกชื่อ" ของกรรมการ
  */
-function getJudgeContext(payload) {
-  const judge = validateJudgeToken_(payload.token);
+function getJudgesList(_payload) {
+  const judges = getAllRows_('Judges')
+    .filter(j => toBool_(j.Active))
+    .sort((a, b) => Number(a.Order) - Number(b.Order));
   const config = getConfigMap_();
-  const round = Number(judge.Round);
-  const roundOpenKey = round === 1 ? 'round1Open' : 'round2Open';
-  const roundOpen = toBool_(config[roundOpenKey]);
+  return {
+    judges: judges.map(j => ({
+      JudgeID: j.JudgeID,
+      JudgeName: j.JudgeName,
+      Order: Number(j.Order),
+      Voted: toBool_(j.Voted),
+    })),
+    votingOpen: toBool_(config.votingOpen),
+    eventName: config.eventName || '',
+  };
+}
+
+/**
+ * getVoteContext — public, รับ judgeId แล้วส่งข้อมูลทั้งหมดที่ใช้ render หน้าโหวต
+ */
+function getVoteContext(payload) {
+  const judgeId = payload.judgeId;
+  if (!judgeId) throw new Error('ไม่ได้ระบุชื่อกรรมการ');
+
+  const judge = getAllRows_('Judges').find(j =>
+    j.JudgeID === judgeId && toBool_(j.Active)
+  );
+  if (!judge) throw new Error('ไม่พบกรรมการ');
+
+  const config = getConfigMap_();
 
   const teams = getAllRows_('Teams')
     .filter(t => t.Status === 'Active')
     .sort((a, b) => Number(a.Order) - Number(b.Order));
 
-  const awards = round === 2
-    ? getAllRows_('Awards')
-        .filter(a => Number(a.Round) === 2)
-        .sort((a, b) => Number(a.Order) - Number(b.Order))
-    : [];
+  const awards = getAllRows_('Awards')
+    .sort((a, b) => Number(a.Order) - Number(b.Order));
 
   return {
     judge: {
       JudgeID: judge.JudgeID,
       JudgeName: judge.JudgeName,
-      Round: round,
       Voted: toBool_(judge.Voted),
       VotedAt: judge.VotedAt,
     },
-    round,
-    roundOpen,
+    votingOpen: toBool_(config.votingOpen),
     teams,
     awards,
     eventName: config.eventName || '',

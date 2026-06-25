@@ -13,18 +13,16 @@
     /* ===== Confetti ===== */
     .confetti-stage {
       pointer-events: none;
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       overflow: hidden;
-      z-index: 0;
+      z-index: 5;
     }
     .confetti {
       position: absolute;
       top: -20px;
-      width: 8px;
-      height: 14px;
+      width: 10px; height: 16px;
       opacity: 0;
-      animation: confetti-fall linear infinite;
+      animation: confetti-fall linear forwards;
     }
     @keyframes confetti-fall {
       0%   { transform: translateY(-40px) rotate(0deg);   opacity: 0; }
@@ -33,60 +31,73 @@
       100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
     }
 
-    /* ===== Fade in cards ===== */
-    .reveal {
-      opacity: 0;
-      transform: translateY(16px);
-      animation: reveal-in 600ms ease-out forwards;
+    /* ===== Reveal animations ===== */
+    .reveal-in {
+      animation: reveal-in 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
     }
     @keyframes reveal-in {
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(20px) scale(0.94); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* hero gradient */
-    .hero-card {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fbcfe8 100%);
+    .scale-in {
+      animation: scale-in 900ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    @keyframes scale-in {
+      0%   { opacity: 0; transform: scale(0.4); }
+      60%  { opacity: 1; transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .pulse-glow {
+      animation: pulse-glow 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { text-shadow: 0 0 12px rgba(251, 191, 36, 0.5); }
+      50%      { text-shadow: 0 0 32px rgba(251, 191, 36, 0.95), 0 0 60px rgba(251, 191, 36, 0.6); }
+    }
+
+    .text-glow-gold {
+      text-shadow: 0 0 18px rgba(251, 191, 36, 0.7), 0 0 36px rgba(251, 191, 36, 0.5);
+    }
+
+    .bg-festive {
+      background: linear-gradient(135deg, #064e3b 0%, #1e293b 35%, #4c1d95 70%, #831843 100%);
     }
   </style>
 </head>
-<body class="relative min-h-screen bg-gradient-to-b from-emerald-50 via-amber-50 to-rose-50 font-sans">
+<body class="relative min-h-screen bg-festive font-sans text-white overflow-x-hidden">
 
-  <!-- ============ LOADING ============ -->
-  <section id="state-loading" class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
-    <div class="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
-    <p class="mt-4 text-sm text-slate-500">กำลังโหลดผล...</p>
-  </section>
+  <!-- ============ STAGE (main render area) ============ -->
+  <main id="stage" class="relative z-10 mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center px-4 py-6 text-center">
+    <!-- inner HTML ถูก replace ตาม state ผ่าน results.js -->
+    <div class="h-10 w-10 animate-spin rounded-full border-4 border-amber-400 border-t-transparent"></div>
+    <p class="mt-4 text-sm text-slate-300">กำลังเชื่อมต่อ...</p>
+  </main>
 
-  <!-- ============ NOT PUBLISHED ============ -->
-  <section id="state-pending" hidden class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
-    <div class="text-7xl">🤫</div>
-    <h1 class="mt-4 text-2xl font-bold text-slate-800">ยังไม่ประกาศผล</h1>
-    <p class="mt-2 max-w-sm text-base text-slate-600">โปรดติดตามการประกาศผลในช่วงพิธีปิดงาน</p>
-    <p class="mt-6 text-xs text-slate-400">หน้านี้จะรีเฟรชอัตโนมัติทุก 10 วินาที</p>
-    <a href="index.html" class="mt-6 text-sm text-emerald-700 underline">← กลับหน้าแรก</a>
-  </section>
+  <!-- ============ TOP BADGE (event name + progress) ============ -->
+  <div id="top-badge" hidden class="fixed left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1 text-xs text-amber-200 backdrop-blur">
+    <span id="badge-event">…</span>
+    <span class="mx-2 opacity-50">·</span>
+    <span id="badge-progress">…</span>
+  </div>
 
-  <!-- ============ RESULTS ============ -->
-  <section id="state-results" hidden class="relative z-10 mx-auto max-w-3xl px-4 pb-16 pt-8">
-    <header class="mb-8 text-center">
-      <div class="text-5xl">🎉</div>
-      <h1 class="mt-2 text-2xl font-extrabold text-emerald-800 sm:text-3xl">ประกาศผลการประกวด</h1>
-      <p id="event-name" class="mt-1 text-sm text-slate-600 sm:text-base">การประกวดชุดต่อต้านยาเสพติด</p>
-      <p class="mt-1 text-xs text-slate-500">โรงเรียนบ้านใหม่</p>
-    </header>
+  <!-- ============ ADMIN CONTROL BAR ============ -->
+  <div id="admin-bar" hidden class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/60 backdrop-blur"
+       style="padding-bottom: env(safe-area-inset-bottom);">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3">
+      <div class="flex items-center gap-2 text-xs">
+        <span class="rounded-full bg-amber-500/20 px-2 py-1 text-amber-300">🛠 Admin</span>
+        <span id="admin-state-text" class="text-slate-300">…</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="admin-prev" class="rounded-lg border border-white/20 px-3 py-2 text-xs text-slate-200 active:scale-95" title="ย้อน">← ย้อน</button>
+        <button id="admin-action" class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-amber-950 shadow active:scale-95">…</button>
+      </div>
+    </div>
+  </div>
 
-    <!-- Round 1 Hero -->
-    <section id="r1-section" class="mb-10"></section>
-
-    <!-- Round 2 Grid -->
-    <section id="r2-section"></section>
-
-    <footer class="mt-12 text-center text-xs text-slate-400">
-      ขอแสดงความยินดีกับทุกทีม 👏
-    </footer>
-  </section>
-
-  <!-- Confetti stage (สร้างผ่าน JS) -->
+  <!-- ============ Confetti stage ============ -->
   <div id="confetti-stage" class="confetti-stage" hidden></div>
 
   <script src="js/config.js"></script>

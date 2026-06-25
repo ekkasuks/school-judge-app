@@ -1,10 +1,13 @@
 /**
- * export-pdf.js — สร้างรายงาน PDF จาก exportData
+ * export-pdf.js — สร้าง PDF จาก exportData (V2 — single round)
  *
- * วิธี:
- *   - สร้าง HTML report (Sarabun) เป็น hidden div
- *   - html2canvas แปลงเป็น canvas → jsPDF addImage
- *   - 1 section = 1 หน้า (เลี่ยงตัดข้อความกลางตาราง)
+ * วิธี: html2canvas capture DOM ที่ใช้ Sarabun → jsPDF addImage
+ *      (ไม่ต้อง embed .ttf, ไทยใช้ได้ทันที)
+ *
+ * โครง 3 หน้า:
+ *   1. ปก
+ *   2. สรุปผู้ได้รับรางวัล (6 รางวัล)
+ *   3. Vote Matrix (6×6) + Assignment summary
  */
 
 const PDF_PAGE = { width: 210, height: 297 }; // A4 mm
@@ -20,7 +23,6 @@ async function exportPDF() {
     if (!jsPDF) throw new Error('jsPDF ไม่พร้อมใช้งาน');
     const pdf = new jsPDF('p', 'mm', 'a4');
 
-    // hidden stage
     stage = document.createElement('div');
     stage.style.cssText = `
       position: fixed; top: 0; left: -10000px;
@@ -33,15 +35,13 @@ async function exportPDF() {
     const sections = [
       buildCover(data),
       buildSummary(data),
-      buildRound1Section(data),
-      buildRound2Section(data),
+      buildVoteMatrixSection(data),
     ];
 
     showBlocker('กำลังสร้างรายงาน...');
     let first = true;
     for (const html of sections) {
       stage.innerHTML = html;
-      // รอ image โหลด (ถ้ามี) ก่อน capture
       await waitImages(stage);
       const canvas = await html2canvas(stage, {
         scale: PDF_SCALE,
@@ -51,7 +51,6 @@ async function exportPDF() {
       });
       const imgData = canvas.toDataURL('image/png');
       const imgH = canvas.height * PDF_PAGE.width / canvas.width;
-      // ถ้า section สูงกว่า A4 → fit ลงหน้าเดียว (scale ลง)
       const drawH = Math.min(imgH, PDF_PAGE.height - 2);
       const drawW = canvas.width * drawH / canvas.height;
       const offsetX = (PDF_PAGE.width - drawW) / 2;
@@ -75,7 +74,7 @@ async function exportPDF() {
 
 function buildCover(data) {
   const cfg = (data.config || []).reduce((m, r) => (m[r.Key] = r.Value, m), {});
-  const event = cfg.eventName || 'การประกวดชุดต่อต้านยาเสพติด';
+  const event = cfg.eventName || 'การประกวด';
   const date = cfg.eventDate || ymd();
   return `
     <div style="text-align: center; padding: 80px 20px;">
@@ -97,24 +96,27 @@ function buildCover(data) {
 
 function buildSummary(data) {
   const results = (data.results || []).sort((a, b) =>
-    Number(a.Round) - Number(b.Round) || String(a.AwardID).localeCompare(String(b.AwardID))
+    Number(a.AwardOrder) - Number(b.AwardOrder)
   );
-  const rows = results.map((r, i) => `
-    <tr style="border-bottom: 1px solid #e2e8f0;">
-      <td style="padding: 10px; text-align: center; color: #94a3b8;">${i + 1}</td>
-      <td style="padding: 10px;">
-        <div style="font-weight: 700; color: ${Number(r.Round) === 1 ? '#92400e' : '#0369a1'};">
-          ${Number(r.Round) === 1 ? '👑' : '🏆'} ${escHTML(r.AwardName)}
-        </div>
-        <div style="font-size: 12px; color: #94a3b8;">รอบที่ ${escHTML(r.Round)}</div>
-      </td>
-      <td style="padding: 10px;">
-        <div style="font-weight: 600;">${escHTML(r.TeamName)}</div>
-        <div style="font-size: 12px; color: #64748b;">${escHTML(r.School || '')}</div>
-      </td>
-      <td style="padding: 10px; text-align: right; font-weight: 700;">${escHTML(r.Score)}</td>
-    </tr>
-  `).join('');
+  const teamById = indexBy(data.teams, 'TeamID');
+
+  const rows = results.map((r, i) => {
+    const t = teamById[r.TeamID] || {};
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px; text-align: center; color: #94a3b8; font-weight: 700;">${i + 1}</td>
+        <td style="padding: 10px;">
+          <div style="font-weight: 700; color: #0369a1;">🏆 ${escHTML(r.AwardName)}</div>
+        </td>
+        <td style="padding: 10px;">
+          <div style="font-weight: 600;">#${escHTML(t.TeamNumber || '?')} ${escHTML(r.TeamName)}</div>
+          <div style="font-size: 12px; color: #64748b;">${escHTML(r.School || '')}</div>
+        </td>
+        <td style="padding: 10px; text-align: right; font-weight: 700;">${escHTML(r.VoteCount)}</td>
+        <td style="padding: 10px; font-size: 11px; color: ${r.Note ? '#be123c' : '#94a3b8'};">${escHTML(r.Note || '–')}</td>
+      </tr>
+    `;
+  }).join('');
 
   return `
     <div>
@@ -125,105 +127,30 @@ function buildSummary(data) {
             <th style="padding: 10px; text-align: center; width: 40px;">#</th>
             <th style="padding: 10px; text-align: left;">รางวัล</th>
             <th style="padding: 10px; text-align: left;">ทีม</th>
-            <th style="padding: 10px; text-align: right; width: 80px;">คะแนน</th>
+            <th style="padding: 10px; text-align: right; width: 80px;">เสียงโหวต</th>
+            <th style="padding: 10px; text-align: left; width: 140px;">หมายเหตุ</th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="4" style="padding: 24px; text-align: center; color: #94a3b8;">ยังไม่มีผลที่บันทึก</td></tr>'}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function buildRound1Section(data) {
-  const teams = (data.teams || []).filter(t => t.Status !== 'Removed');
-  const judges = (data.judges || []).filter(j => Number(j.Round) === 1 && (j.Active === true || j.Active === 'TRUE'));
-  const votes = data.round1Votes || [];
-
-  if (judges.length === 0 || teams.length === 0) {
-    return `<div><h2 style="font-size: 22px; color: #047857;">รอบที่ 1 — น่ารักจนกรรมการใจละลาย</h2>
-      <p style="color: #94a3b8;">ยังไม่มีข้อมูล</p></div>`;
-  }
-
-  // matrix: [team][judge] = points; row totals
-  const matrix = {};
-  teams.forEach(t => {
-    matrix[t.TeamID] = { total: 0, byJudge: {}, rank1: 0, rank2: 0, rank3: 0 };
-  });
-  votes.forEach(v => {
-    const m = matrix[v.TeamID];
-    if (!m) return;
-    m.byJudge[v.JudgeID] = Number(v.Points || 0);
-    m.total += Number(v.Points || 0);
-    if (Number(v.Rank) === 1) m.rank1++;
-    if (Number(v.Rank) === 2) m.rank2++;
-    if (Number(v.Rank) === 3) m.rank3++;
-  });
-
-  const sorted = teams.slice().sort((a, b) =>
-    matrix[b.TeamID].total - matrix[a.TeamID].total ||
-    matrix[b.TeamID].rank1 - matrix[a.TeamID].rank1
-  );
-
-  const judgeCols = judges.map(j =>
-    `<th style="padding: 8px; text-align: center; font-weight: 600;">${escHTML(j.JudgeName || j.JudgeID)}</th>`
-  ).join('');
-
-  const bodyRows = sorted.map((t, i) => {
-    const m = matrix[t.TeamID];
-    const cells = judges.map(j => {
-      const pt = m.byJudge[j.JudgeID];
-      return `<td style="padding: 8px; text-align: center;">${pt != null ? pt : '–'}</td>`;
-    }).join('');
-    const isWinner = t.Status === 'Winner-Round1';
-    return `
-      <tr style="border-bottom: 1px solid #e2e8f0; ${isWinner ? 'background: #fef3c7;' : ''}">
-        <td style="padding: 8px; text-align: center; color: ${i === 0 ? '#92400e' : '#94a3b8'}; font-weight: ${i === 0 ? 700 : 400};">${i + 1}</td>
-        <td style="padding: 8px;">
-          <span style="display: inline-block; background: #d1fae5; color: #065f46; padding: 1px 6px; border-radius: 9999px; font-size: 11px; margin-right: 4px;">#${escHTML(t.TeamNumber)}</span>
-          ${escHTML(t.TeamName)}
-          ${isWinner ? ' <span style="color: #92400e;">👑</span>' : ''}
-        </td>
-        ${cells}
-        <td style="padding: 8px; text-align: right; font-weight: 700;">${m.total}</td>
-        <td style="padding: 8px; text-align: center; font-size: 12px; color: #64748b;">${m.rank1}/${m.rank2}/${m.rank3}</td>
-      </tr>`;
-  }).join('');
-
-  return `
-    <div>
-      <h2 style="font-size: 22px; color: #047857; margin-bottom: 4px;">🥇 รอบที่ 1 — น่ารักจนกรรมการใจละลาย</h2>
-      <p style="font-size: 12px; color: #64748b; margin-bottom: 16px;">
-        กรรมการจัดอันดับ — อันดับ 1 = ${teams.filter(t => t.Status === 'Active' || t.Status === 'Winner-Round1').length} คะแนน, ลดหลั่นลง
-      </p>
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-        <thead>
-          <tr style="background: #ecfdf5; color: #065f46;">
-            <th style="padding: 8px; text-align: center; width: 32px;">#</th>
-            <th style="padding: 8px; text-align: left;">ทีม</th>
-            ${judgeCols}
-            <th style="padding: 8px; text-align: right;">รวม</th>
-            <th style="padding: 8px; text-align: center; font-size: 11px;">1/2/3</th>
-          </tr>
-        </thead>
-        <tbody>${bodyRows}</tbody>
+        <tbody>${rows || '<tr><td colspan="5" style="padding: 24px; text-align: center; color: #94a3b8;">ยังไม่มีผลที่บันทึก</td></tr>'}</tbody>
       </table>
       <p style="margin-top: 16px; font-size: 11px; color: #94a3b8;">
-        คอลัมน์ "1/2/3" = จำนวนครั้งที่ได้อันดับ 1 / 2 / 3 (ใช้เป็นเกณฑ์ tiebreak)
+        การจับคู่ใช้ Hungarian Algorithm (1 ทีม : 1 รางวัล) โดยให้ผลรวมเสียงโหวตสูงสุด
       </p>
     </div>
   `;
 }
 
-function buildRound2Section(data) {
-  const teams = (data.teams || []).filter(t => t.Status === 'Active');
-  const awards = (data.awards || [])
-    .filter(a => Number(a.Round) === 2)
+function buildVoteMatrixSection(data) {
+  const teams = (data.teams || [])
+    .filter(t => t.Status === 'Active')
     .sort((a, b) => Number(a.Order) - Number(b.Order));
-  const votes = data.round2Votes || [];
-  const r2Results = (data.results || []).filter(r => Number(r.Round) === 2);
+  const awards = (data.awards || [])
+    .sort((a, b) => Number(a.Order) - Number(b.Order));
+  const votes = data.votes || [];
+  const results = (data.results || []);
 
   if (teams.length === 0 || awards.length === 0) {
-    return `<div><h2 style="font-size: 22px; color: #0369a1;">รอบที่ 2 — รางวัล 6 ประเภท</h2>
+    return `<div><h2 style="font-size: 22px; color: #0369a1;">Vote Matrix</h2>
       <p style="color: #94a3b8;">ยังไม่มีข้อมูล</p></div>`;
   }
 
@@ -237,11 +164,7 @@ function buildRound2Section(data) {
 
   // ทีมไหนได้รางวัลอะไร
   const teamAward = {};
-  const awardTeam = {};
-  r2Results.forEach(r => {
-    teamAward[r.TeamID] = r.AwardID;
-    awardTeam[r.AwardID] = r.TeamID;
-  });
+  results.forEach(r => { teamAward[r.TeamID] = r.AwardID; });
 
   const awardCols = awards.map(a =>
     `<th style="padding: 6px; text-align: center; font-weight: 600; font-size: 11px;">${escHTML(a.AwardName)}</th>`
@@ -263,8 +186,11 @@ function buildRound2Section(data) {
       </tr>`;
   }).join('');
 
-  // assignment summary
-  const assignSummary = r2Results.length > 0
+  // จำนวนกรรมการที่ส่งคะแนน
+  const judgesVoted = (data.judges || []).filter(j => j.Voted === true || j.Voted === 'TRUE').length;
+  const judgesTotal = (data.judges || []).filter(j => j.Active === true || j.Active === 'TRUE').length;
+
+  const assignSummary = results.length > 0
     ? `<div style="margin-top: 24px;">
         <h3 style="font-size: 16px; color: #0369a1; margin-bottom: 8px;">🎯 ผลการจับคู่ (Hungarian Assignment)</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -277,13 +203,11 @@ function buildRound2Section(data) {
             </tr>
           </thead>
           <tbody>
-            ${r2Results.sort((a, b) =>
-              awards.findIndex(x => x.AwardID === a.AwardID) - awards.findIndex(x => x.AwardID === b.AwardID)
-            ).map(r => `
+            ${results.sort((a, b) => Number(a.AwardOrder) - Number(b.AwardOrder)).map(r => `
               <tr style="border-bottom: 1px solid #e2e8f0;">
                 <td style="padding: 8px; font-weight: 600;">${escHTML(r.AwardName)}</td>
                 <td style="padding: 8px;">${escHTML(r.TeamName)}</td>
-                <td style="padding: 8px; text-align: right; font-weight: 700;">${escHTML(r.Score)}</td>
+                <td style="padding: 8px; text-align: right; font-weight: 700;">${escHTML(r.VoteCount)}</td>
                 <td style="padding: 8px; font-size: 11px; color: ${r.Note ? '#be123c' : '#94a3b8'};">${escHTML(r.Note || '–')}</td>
               </tr>
             `).join('')}
@@ -294,9 +218,10 @@ function buildRound2Section(data) {
 
   return `
     <div>
-      <h2 style="font-size: 22px; color: #0369a1; margin-bottom: 4px;">🥈 รอบที่ 2 — รางวัล 6 ประเภท</h2>
+      <h2 style="font-size: 22px; color: #0369a1; margin-bottom: 4px;">📊 Vote Matrix</h2>
       <p style="font-size: 12px; color: #64748b; margin-bottom: 16px;">
-        จำนวนเสียงโหวต (แถว=ทีม, คอลัมน์=รางวัล) — เซลล์ฟ้า = ผลการจับคู่
+        จำนวนเสียงโหวต (แถว = ทีม, คอลัมน์ = รางวัล) — เซลล์ฟ้า = ผลการจับคู่ ·
+        กรรมการที่ส่งคะแนน <strong>${judgesVoted}/${judgesTotal}</strong>
       </p>
       <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
         <thead>
@@ -319,6 +244,12 @@ function escHTML(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function indexBy(arr, key) {
+  const m = {};
+  (arr || []).forEach(x => { m[x[key]] = x; });
+  return m;
 }
 
 function ymd(d = new Date()) {

@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>กรรมการ - ระบบตัดสินการประกวด</title>
+  <title>กรรมการ - ระบบโหวต</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body class="min-h-screen bg-slate-50 font-sans">
 
@@ -22,97 +21,93 @@
   <!-- ============ ERROR ============ -->
   <section id="state-error" hidden class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
     <div class="text-6xl">⚠️</div>
-    <h1 class="mt-4 text-xl font-bold text-rose-700">ไม่สามารถเปิดหน้านี้ได้</h1>
+    <h1 class="mt-4 text-xl font-bold text-rose-700">เกิดข้อผิดพลาด</h1>
     <p id="error-message" class="mt-2 max-w-sm text-sm text-slate-600"></p>
-    <p class="mt-6 text-xs text-slate-400">กรุณาติดต่อผู้ดูแลระบบ</p>
+    <button id="error-retry" class="mt-6 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white">ลองอีกครั้ง</button>
   </section>
 
-  <!-- ============ CLOSED (round not open) ============ -->
+  <!-- ============ PICK NAME ============ -->
+  <section id="state-pick-name" hidden class="mx-auto max-w-md px-4 pb-10 pt-6">
+    <div class="text-center">
+      <div class="text-5xl">👨‍⚖️</div>
+      <h1 class="mt-2 text-xl font-bold text-emerald-800">กรุณาเลือกชื่อของท่าน</h1>
+      <p id="pick-event-name" class="mt-1 text-xs text-slate-500"></p>
+    </div>
+
+    <div id="pick-voting-closed" hidden class="mt-4 rounded-xl bg-amber-50 p-3 text-center text-sm text-amber-800 ring-1 ring-amber-200">
+      ⏳ ยังไม่เปิดให้ลงคะแนน — โปรดเลือกชื่อล่วงหน้าได้
+    </div>
+
+    <ul id="pick-list" class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3"></ul>
+
+    <p class="mt-6 text-center text-xs text-slate-400">ถ้าไม่พบชื่อ โปรดติดต่อผู้ดูแลระบบ</p>
+  </section>
+
+  <!-- ============ CLOSED (voting not open) ============ -->
   <section id="state-closed" hidden class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
     <div class="text-6xl">⏳</div>
     <h1 class="mt-4 text-xl font-bold text-slate-800">ยังไม่เปิดให้ลงคะแนน</h1>
     <p class="mt-2 max-w-sm text-sm text-slate-600">โปรดรอประกาศจากผู้ดูแลระบบ</p>
     <p id="closed-judge-info" class="mt-6 text-xs text-slate-400"></p>
     <p class="mt-2 text-xs text-slate-400">หน้านี้จะรีเฟรชอัตโนมัติทุก 10 วินาที</p>
+    <button id="closed-change-name" class="mt-6 text-xs text-emerald-700 underline">ไม่ใช่ฉัน? เปลี่ยนชื่อ</button>
   </section>
 
   <!-- ============ DONE (already voted) ============ -->
   <section id="state-done" hidden class="flex min-h-screen flex-col items-center justify-center px-6 text-center">
     <div class="text-7xl">✅</div>
     <h1 class="mt-4 text-2xl font-bold text-emerald-700">ขอบคุณค่ะ/ครับ!</h1>
-    <p class="mt-2 max-w-sm text-base text-slate-700">คะแนนของคุณถูกบันทึกเรียบร้อยแล้ว</p>
+    <p class="mt-2 max-w-sm text-base text-slate-700">คะแนนของท่านถูกบันทึกเรียบร้อยแล้ว</p>
     <p id="done-judge-info" class="mt-6 text-sm text-slate-500"></p>
     <p id="done-voted-at" class="mt-1 text-xs text-slate-400"></p>
   </section>
 
-  <!-- ============ ROUND 1 — RANK ============ -->
-  <section id="state-round1" hidden>
+  <!-- ============ VOTE (per award) ============ -->
+  <section id="state-vote" hidden>
     <header class="sticky top-0 z-20 bg-white shadow-sm">
-      <div class="px-4 py-3">
-        <p class="text-xs text-emerald-700">รอบที่ 1 — น่ารักจนกรรมการใจละลาย</p>
-        <h1 id="r1-judge-name" class="text-base font-bold text-slate-800"></h1>
-      </div>
-    </header>
-
-    <div class="mx-auto max-w-md px-4 pt-3 pb-32">
-      <div class="rounded-2xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-200">
-        🪄 <strong>ลากเรียงทีม</strong> จากชอบมากที่สุด <em>(อันดับ 1)</em> ไว้บนสุด<br>
-        แล้วเรียงลงไปจนถึงอันดับสุดท้าย<br>
-        เสร็จแล้วกด <strong>"ส่งคะแนน"</strong>
-      </div>
-
-      <ol id="r1-list" class="mt-4 space-y-2"></ol>
-    </div>
-
-    <!-- sticky submit -->
-    <div class="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white p-3 shadow-2xl"
-         style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
-      <button id="r1-submit"
-              class="block w-full rounded-2xl bg-emerald-600 px-6 py-4 text-base font-bold text-white shadow-lg active:scale-95">
-        ✅ ส่งคะแนน
-      </button>
-    </div>
-  </section>
-
-  <!-- ============ ROUND 2 — เลือกรางวัลทีละทีม ============ -->
-  <section id="state-round2" hidden>
-    <header class="sticky top-0 z-20 bg-white shadow-sm">
-      <div class="px-4 py-3">
-        <p class="text-xs text-sky-700">รอบที่ 2 — เลือกรางวัลที่เหมาะสมที่สุด</p>
-        <h1 id="r2-judge-name" class="text-base font-bold text-slate-800"></h1>
+      <div class="mx-auto max-w-md px-4 py-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-sky-700">โหวตเลือกทีมที่เหมาะกับรางวัล</p>
+            <h1 id="vote-judge-name" class="text-base font-bold text-slate-800"></h1>
+          </div>
+          <button id="vote-change-name" class="rounded-lg px-2 py-1 text-xs text-slate-500">ไม่ใช่ฉัน?</button>
+        </div>
         <div class="mt-2 flex items-center gap-2">
-          <span id="r2-progress-text" class="text-xs font-medium text-slate-600">ทีม 1 / 6</span>
+          <span id="vote-progress-text" class="text-xs font-medium text-slate-600">รางวัล 1 / 6</span>
           <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-            <div id="r2-progress-bar" class="progress-fill h-full bg-sky-500" style="width: 0%"></div>
+            <div id="vote-progress-bar" class="progress-fill h-full bg-sky-500" style="width: 0%"></div>
           </div>
         </div>
       </div>
     </header>
 
-    <!-- FORM VIEW (ทีละทีม) -->
-    <div id="r2-form" class="mx-auto max-w-md px-4 pt-3 pb-28">
-      <div id="r2-team-card" class="rounded-2xl bg-white p-4 shadow ring-1 ring-slate-100"></div>
-
-      <div class="mt-4">
-        <p class="mb-2 text-sm font-semibold text-slate-700">เลือกรางวัลที่เหมาะกับทีมนี้ที่สุด</p>
-        <ul id="r2-awards" class="space-y-2"></ul>
+    <div id="vote-form" class="mx-auto max-w-md px-4 pt-3 pb-28">
+      <!-- การ์ดรางวัล (เด่นกลางหน้า) -->
+      <div class="rounded-2xl bg-gradient-to-br from-amber-100 to-rose-100 p-5 text-center shadow ring-2 ring-amber-200">
+        <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">รางวัลที่ <span id="vote-award-num"></span></p>
+        <h2 id="vote-award-name" class="mt-1 text-2xl font-extrabold text-amber-900"></h2>
+        <p class="mt-2 text-xs text-amber-700">เลือกทีมที่เหมาะกับรางวัลนี้ที่สุด</p>
       </div>
+
+      <!-- list ทีม -->
+      <ul id="vote-teams" class="mt-4 space-y-2"></ul>
     </div>
 
-    <!-- REVIEW VIEW (สรุปก่อนส่ง) -->
-    <div id="r2-review" hidden class="mx-auto max-w-md px-4 pt-3 pb-28">
+    <!-- REVIEW VIEW -->
+    <div id="vote-review" hidden class="mx-auto max-w-md px-4 pt-3 pb-28">
       <div class="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-        🔍 ตรวจสอบรางวัลที่เลือกให้ครบทุกทีม กดที่แถวเพื่อแก้ไข
+        🔍 ตรวจสอบคำตอบให้ครบทุกรางวัล กดที่แถวเพื่อแก้ไข
       </div>
-      <ul id="r2-review-list" class="mt-4 space-y-2"></ul>
+      <ul id="review-list" class="mt-4 space-y-2"></ul>
     </div>
 
-    <!-- Sticky bottom navigation -->
+    <!-- Sticky bottom -->
     <div class="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white p-3 shadow-2xl"
          style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
       <div class="mx-auto flex max-w-md gap-2">
-        <button id="r2-back" class="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-700 active:scale-95">← ย้อนกลับ</button>
-        <button id="r2-next" class="flex-1 rounded-2xl bg-sky-600 px-4 py-3 text-base font-bold text-white shadow active:scale-95">ถัดไป →</button>
+        <button id="vote-back" class="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-700 active:scale-95">← ก่อนหน้า</button>
+        <button id="vote-next" class="flex-1 rounded-2xl bg-sky-600 px-4 py-3 text-base font-bold text-white shadow active:scale-95">ถัดไป →</button>
       </div>
     </div>
   </section>

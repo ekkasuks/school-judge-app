@@ -1,251 +1,197 @@
-# Project Specification — ระบบตัดสินการประกวดชุดต่อต้านยาเสพติด
+# Project Specification — V2 (Single Round)
 
-**โรงเรียนบ้านใหม่** | ระดับประถมศึกษา
+**โรงเรียนบ้านใหม่** | ระดับประถมศึกษา | ระบบตัดสินการประกวดชุดต่อต้านยาเสพติด
 
 ---
 
-## 1. ภาพรวม (Overview)
+## 1. ภาพรวม
 
-Web App สำหรับการตัดสินการประกวดชุดต่อต้านยาเสพติดแบบออนไลน์ กรรมการลงคะแนนผ่านมือถือด้วยลิงก์เฉพาะตัว ระบบคำนวณผลและประกาศผลอัตโนมัติ
+Web App สำหรับโหวต **รอบเดียว** — 6 ทีม × 6 รางวัล × 11 กรรมการ
+- กรรมการใช้ **ลิงก์เดียวกัน** → เลือกชื่อตนเอง → โหวต "ทีมที่เหมาะกับแต่ละรางวัล"
+- Admin กดปิดโหวต → ระบบคำนวณ **Hungarian Assignment** อัตโนมัติ
+- หน้าประกาศผล = **TV Reveal Mode** — ขึ้นชื่อรางวัล → กดเปิดผล → ทีมโผล่พร้อม effect → กดถัดไป (วน 6 รางวัล)
 
 ## 2. เป้าหมาย
 
-- กรรมการลงคะแนนจากมือถือผ่านลิงก์เฉพาะของตน
-- คำนวณผลอัตโนมัติทั้ง 2 รอบ
+- กรรมการโหวตจากมือถือผ่านลิงก์เดียว ไม่ต้องแจกรหัสรายตัว
+- ระบบจับคู่ทีม↔รางวัลให้เหมาะสมที่สุด (ค่ารวมเสียงสูงสุด ใต้ bijection)
+- หน้าประกาศผลตื่นเต้น เหมาะกับการฉายจอใหญ่
 - รองรับมือถือ 100%, โหลด ≤ 3 วินาที
-- ไม่มีค่าใช้จ่ายรายเดือน
-- รองรับกรรมการลงคะแนนพร้อมกัน ≥ 20 คน
+- ค่าใช้จ่าย 0 บาท/เดือน
 
-## 3. Tech Stack
+## 3. Tech Stack (ไม่เปลี่ยน)
 
 | Layer | เทคโนโลยี |
 |-------|-----------|
 | Frontend | HTML5 + CSS3 + TailwindCSS (CDN) + Vanilla JS |
 | Backend | Google Apps Script Web App |
-| Database | Google Sheets |
+| Database | Google Sheets (7 ชีต) |
 | Image Storage | Google Drive |
-| Version Control | GitHub |
-| Deployment | GitHub Pages |
-| API | REST ผ่าน Apps Script (POST + text/plain เลี่ยง CORS preflight) |
+| Deploy | GitHub Pages |
+| Libraries (CDN) | qrcode-generator, jsPDF, html2canvas, SheetJS |
+
+> ❌ ลบ SortableJS แล้ว — ไม่มี drag & drop ranking อีกต่อไป
 
 ## 4. ผู้ใช้งาน (Roles)
 
-| Role | สิทธิ์ |
-|------|-------|
-| **Admin** | login ด้วย password, จัดการทุกอย่าง |
-| **Judge (กรรมการ)** | เข้าผ่าน token URL, ลงคะแนนได้ครั้งเดียวต่อรอบ |
-| **Public** | ดูประกาศผลโดยไม่ต้อง login |
+| Role | สิทธิ์ | วิธีเข้า |
+|------|-------|---------|
+| **Admin** | จัดการทุกอย่าง | password |
+| **Judge (กรรมการ 11 คน)** | โหวต 1 ครั้งต่อคน (6 รางวัล) | ลิงก์ shared + เลือกชื่อตัวเอง |
+| **Public / TV** | ดูประกาศผล (auto-sync เมื่อ admin กดปุ่ม) | ลิงก์ shared, ไม่ต้อง login |
 
 ---
 
 ## 5. ระบบ Admin
 
 ### 5.1 Login
-- รหัสผ่าน Admin (เก็บใน Apps Script Properties)
-- Token หมดอายุใน 8 ชั่วโมง
+- Password เก็บใน Apps Script Properties
+- Token expiry 8 ชั่วโมง
 
 ### 5.2 เมนูหลัก
-1. จัดการทีมแข่งขัน
-2. จัดการกรรมการ
-3. เปิด-ปิดรอบการลงคะแนน
-4. ดูสถานะการลงคะแนน
-5. ดูผลคะแนน
-6. ประกาศผล
-7. Export PDF
-8. Export Excel
+1. Dashboard (progress + sync state)
+2. จัดการทีม (6 ทีม — เหมือนเดิม + อัปโหลด Drive)
+3. จัดการกรรมการ (เพิ่ม/แก้ไขชื่อ/ลบ — รายชื่อ default 11 คน)
+4. ควบคุมโหวต (เปิด/ปิด → กดปิด = auto-compute)
+5. ผลคะแนน (preview Hungarian, click-to-swap override)
+6. ประกาศผล TV Mode (ปุ่ม Next / Reveal)
+7. Export PDF / Excel
 
-### 5.3 จัดการทีมแข่งขัน
-- จำนวนเริ่มต้น **7 ทีม**
-- ฟิลด์ทีม: `TeamID`, `TeamName`, `School`, `TeamNumber`, `ImageURL`, `Order`
-- การกระทำ: เพิ่ม / แก้ไขชื่อ / แก้ไขรูป / ลบ / เปลี่ยนลำดับ
-- อัปโหลดรูปไป **Google Drive** → บันทึก URL ลง Sheet
+### 5.3 Dashboard
+- จำนวนทีม / กรรมการ / สถานะคำนวณ
+- Progress bar: `X / 11` กรรมการลงคะแนน
+- realtime polling 5 วินาที
 
-### 5.4 จัดการกรรมการ
-- **รอบที่ 1:** 3 คน
-- **รอบที่ 2:** 7 คน
-- การกระทำ: เพิ่ม / แก้ไขชื่อ / รีเซ็ตลิงก์ (regenerate token)
-
-### 5.5 Dashboard
-- จำนวนทีม / กรรมการ / ผู้ลงคะแนนแล้ว / ยังไม่ลง
-- Progress bar แยกรอบ (เช่น `รอบที่ 1: 2/3`, `รอบที่ 2: 5/7`)
-- Realtime: รีเฟรชทุก 5 วินาที
+### 5.4 ควบคุมโหวต
+- Toggle เดียว: `votingOpen`
+- เมื่อเปลี่ยน TRUE → FALSE: ระบบเรียก `computeResults` ทันที (Hungarian) + เขียนลง `Results`
+- เปลี่ยน FALSE → TRUE หลังคำนวณแล้ว: clear `Results` + `revealIndex=0`
 
 ---
 
-## 6. รอบที่ 1 — "น่ารักจนกรรมการใจละลาย"
+## 6. ระบบกรรมการ
 
-### 6.1 รูปแบบ
-- ทีมเข้าแข่งขัน: **7 ทีม**
-- กรรมการ: **3 คน**
-- รางวัล: 1 รางวัล ("น่ารักจนกรรมการใจละลาย")
+### 6.1 ลิงก์ shared
+- URL: `https://<pages>/judge.html`
+- **ไม่มี token** — รายชื่อกรรมการเปิดเผยในแอป (เป็น in-house judges, low security needs)
 
-### 6.2 วิธีตัดสิน
-กรรมการ **จัดอันดับ** ทีมทั้ง 7 ทีมด้วย **Drag & Drop**
-
-| อันดับ | คะแนน |
-|--------|-------|
-| 1 | 7 |
-| 2 | 6 |
-| 3 | 5 |
-| 4 | 4 |
-| 5 | 3 |
-| 6 | 2 |
-| 7 | 1 |
-
-### 6.3 หน้าจอกรรมการ
-- แสดง: รูปทีม + ชื่อทีม
-- ลากเรียงจากบน (อันดับ 1) → ล่าง (อันดับ 7)
-- ปุ่ม "ส่งคะแนน" → ระบบบันทึกและล็อก ไม่สามารถแก้ไขได้
-
-### 6.4 การคำนวณผล
-- รวมคะแนนจากกรรมการทั้ง 3 คน
-- ทีมที่ได้คะแนนรวมสูงสุด = ผู้ชนะรางวัล "น่ารักจนกรรมการใจละลาย"
-- ผู้ชนะ → `Status = Winner-Round1` → ตัดออกจากรอบที่ 2 อัตโนมัติ
-
-### 6.5 กรณีคะแนนเท่ากัน (Tiebreak)
-1. จำนวน "อันดับ 1" มากกว่า
-2. จำนวน "อันดับ 2" มากกว่า
-3. จำนวน "อันดับ 3" มากกว่า
-4. หากยังเท่า → Admin เลือกผู้ชนะเอง
-
----
-
-## 7. รอบที่ 2 — รางวัล 6 ประเภท
-
-### 7.1 รูปแบบ
-- ทีมเข้าแข่งขัน: **6 ทีม** (ที่เหลือจากรอบที่ 1)
-- กรรมการ: **7 คน**
-- รางวัล 6 ประเภท:
-  1. หลอนชุด ไม่หลอนยา
-  2. พลังจิ๋วแต่แจ๋ว
-  3. เด็กทรงดี ไม่มีทรงยา
-  4. โอ้โห ! ทำไปได้
-  5. เจ้าหนูพลังบวก
-  6. ตัวตึงไม่พึ่งผง
-
-### 7.2 วิธีตัดสิน
-- แสดงผู้เข้าประกวด **ทีละทีม** (ทีม A → ทีม B → ...)
-- แต่ละทีม: แสดงรูป + ชื่อ + **radio button รางวัลทั้ง 6**
-- กรรมการเลือก "รางวัลที่เหมาะสมที่สุด" สำหรับทีมนั้น **1 รางวัล**
-- ต้องเลือกครบทั้ง 6 ทีม → กดส่ง → ล็อก
-
-> ⚠️ หมายเหตุ: 1 กรรมการ อาจเลือกรางวัลเดียวกันซ้ำให้หลายทีมได้ (เป็นการโหวต ไม่ใช่การจัด assignment)
-
-### 7.3 การคำนวณผล — Assignment Matching
-หลังกรรมการทุกคน vote ครบ:
-
-**Step A:** สร้างตาราง vote count `votes[team][award]` = จำนวนกรรมการที่โหวต `award` ให้ `team`
-
-**Step B:** หา assignment ที่:
-- 1 ทีม ได้ 1 รางวัล
-- 1 รางวัล มี 1 ผู้ชนะ
-- ผลรวม `votes[team][award]` ตามการ assign **สูงสุด**
-
-ใช้ **Hungarian Algorithm** (assignment problem) บน 6×6 matrix
-
-### 7.4 กรณีหลายคำตอบให้ผลรวมเท่ากัน
-- ใช้คำตอบแรกที่อัลกอริทึมหา (deterministic)
-- Admin override ได้ในหน้า "ผลคะแนน" ก่อนกด "ประกาศผล"
-
----
-
-## 8. ระบบกรรมการ (Token System)
-
-- Token สร้างอัตโนมัติเมื่อ admin เพิ่มกรรมการ
-- รูปแบบ: `judge-r{round}-{6 hex}` เช่น `judge-r1-a1b2c3`
-- ลิงก์: `https://<github-pages-url>/judge.html?token=judge-r1-a1b2c3`
-- **ใช้งานได้ครั้งเดียวต่อรอบ** (กดส่งแล้วล็อก)
-- บันทึก `VotedAt` timestamp
-- Admin รีเซ็ต token ได้ → generate ใหม่, ล้างคะแนนเก่าของ token นั้น
-
----
-
-## 9. ประกาศผล (Public Result)
-
-- หน้า `/results.html` ไม่ต้อง login
-- แสดงเมื่อ Admin กด "ประกาศผล" (Config `resultsPublished = TRUE`)
-
-### 9.1 ผลรอบที่ 1
+### 6.2 Flow
 ```
-🏆 น่ารักจนกรรมการใจละลาย
-[รูปทีม]
-ชื่อทีม — โรงเรียน
-คะแนนรวม: XX
+เปิดลิงก์ → ถ้ายังไม่เคยเลือก → "เลือกชื่อของคุณ"
+                                  │
+                                  ▼
+  list 11 ชื่อ (รวม "ผอ.") + ปุ่ม "ฉันคือ ___"
+                                  │
+            เก็บ judgeId ใน localStorage  →  หน้าโหวต
+                                  │
+                          (ถ้า Voted=TRUE → ขอบคุณ)
+                                  │
+                                  ▼
+  รางวัล 1/6 → เลือก 1 ทีม → ถัดไป
+  รางวัล 2/6 → ... → ถัดไป
+  ...
+  รางวัล 6/6 → ตรวจสอบ → ส่ง
+                                  │
+                                  ▼
+                     "ขอบคุณ" state (lock)
 ```
 
-### 9.2 ผลรอบที่ 2
-แสดงการ์ดรางวัล 6 ใบ:
-```
-🏆 หลอนชุด ไม่หลอนยา
-[รูปทีม]
-ทีม ABC — โรงเรียน...
-```
+### 6.3 รายละเอียดหน้า "เลือกชื่อ"
+- โหลด `getJudgesList()` (public)
+- ปุ่มใหญ่ 11 ใบ (ตามลำดับ Order) แสดงชื่อ
+- ปุ่มที่ `Voted=TRUE` → grey + "✅ ส่งแล้ว" + disabled
+- กดปุ่ม → เก็บ `judgeId` ใน `localStorage.judge_id` → เปลี่ยนหน้า
+
+### 6.4 รายละเอียดหน้าโหวต
+- header: ชื่อกรรมการ + progress
+- การ์ดใหญ่: **ชื่อรางวัล** (เน้น)
+- ใต้: 6 ทีม (รูป + ชื่อ) + radio
+- ปุ่ม "ก่อนหน้า / ถัดไป"
+- หน้าสุดท้าย: review → ส่ง
+- localStorage draft `judge_draft_<judgeId>` — restore เมื่อรีเฟรช
+
+### 6.5 ปกป้อง double-submit
+- ตรวจ `Voted=TRUE` ภายใน `LockService`
+- หลังส่ง → ลบ draft + เปลี่ยนเป็น "ขอบคุณ"
 
 ---
 
-## 10. Export
+## 7. ระบบประกาศผล (TV Reveal Mode)
 
-### 10.1 PDF (ใช้ jsPDF ฝั่ง client)
-- รายงานคะแนนรอบที่ 1 (matrix กรรมการ × ทีม)
-- รายงานคะแนนรอบที่ 2 (vote count matrix + ผล assignment)
-- สรุปผู้ได้รับรางวัล
+### 7.1 ขอบเขต
+- Admin เปิด `resultsPublished=TRUE` หลังคำนวณเรียบร้อย
+- หน้า `results.html` ฉายจอทีวี — full-screen friendly
 
-### 10.2 Excel (ใช้ SheetJS ฝั่ง client หรือ export CSV จาก Apps Script)
-- Sheet 1: ตารางคะแนนทั้งหมด
-- Sheet 2: รายงานกรรมการ (ใครส่งเมื่อไหร่)
-- Sheet 3: สรุปผลการแข่งขัน
+### 7.2 State
+ใน `Config`:
+- `revealIndex`: 0..6 — รางวัลปัจจุบันที่ "เปิดเผย" แล้ว
+- `revealedTeam`: TRUE/FALSE — ในรางวัลปัจจุบัน แสดงชื่อทีมแล้วหรือยัง
+
+### 7.3 Flow บนหน้า results.html
+```
+revealIndex=0  → "กดเริ่มประกาศ"
+revealIndex=1, revealedTeam=FALSE → แสดงชื่อรางวัล 1, ปุ่ม "เปิดผล"
+revealIndex=1, revealedTeam=TRUE  → แสดงชื่อทีม + confetti, ปุ่ม "รางวัลถัดไป"
+revealIndex=2, revealedTeam=FALSE → ชื่อรางวัล 2 ...
+...
+revealIndex=6, revealedTeam=TRUE  → ทีมสุดท้าย → ปุ่ม "ดูสรุปทั้งหมด"
+```
+
+### 7.4 Effects
+- ขึ้นชื่อรางวัล: drumroll animation + fade-in + scale
+- เปิดผลทีม: confetti burst + zoom รูป + ชื่อทีมตัวใหญ่
+- 6 รางวัลครบ: grid 6 ใบสรุป + ฉลอง
+
+### 7.5 ปุ่มควบคุม
+- **เฉพาะ admin** เท่านั้นที่กดเปิด/ถัดไป
+- บนหน้า results มี passcode-gated panel (admin token จาก localStorage)
+- ถ้าไม่มี token → แสดงผลตาม state เท่านั้น (passive viewer)
 
 ---
 
-## 11. API Contract (Apps Script)
+## 8. API Contract (Apps Script)
 
 ทุก request: `POST` body JSON `{ action, payload }`, content-type `text/plain`
 
 | Action | Auth | Description |
 |--------|------|-------------|
 | `adminLogin` | – | { password } → { token } |
-| `getDashboard` | admin | สถานะรวม |
-| `getTeams` | – | รายการทีม (public ใช้ได้) |
-| `saveTeam` | admin | เพิ่ม/แก้ไขทีม |
-| `deleteTeam` | admin | |
-| `reorderTeams` | admin | { teamIds: [...] } |
-| `uploadImage` | admin | { filename, base64 } → { url } |
-| `getJudges` | admin | |
-| `saveJudge` | admin | เพิ่ม/แก้ไขกรรมการ + gen token |
-| `resetJudgeToken` | admin | |
-| `setConfig` | admin | { key, value } |
-| `getJudgeContext` | – | { token } → ข้อมูลรอบ + ทีม |
-| `submitRound1Vote` | judge token | { token, rankings: [teamId...] } |
-| `submitRound2Vote` | judge token | { token, votes: { teamId: award } } |
-| `getResults` | – | คืนผลเมื่อ published |
-| `getAdminResults` | admin | คืนผลก่อน publish ได้ |
-| `publishResults` | admin | |
-| `exportData` | admin | dump ทุก sheet → JSON |
+| `getJudgesList` | – | public — รายชื่อ + Voted flag |
+| `getVoteContext` | – | { judgeId } → judge + teams + awards + votingOpen |
+| `submitVote` | – | { judgeId, votes: [{awardId, teamId}] × 6 } |
+| `getTeams` | – | public |
+| `saveTeam` / `deleteTeam` / `reorderTeams` / `uploadImage` | admin | |
+| `getJudges` / `saveJudge` / `deleteJudge` | admin | |
+| `getDashboard` | admin | สถานะ + count |
+| `setConfig` | admin | ถ้า `votingOpen` → FALSE จะ trigger auto-compute |
+| `computeResults` | admin | manual recompute |
+| `setResults` | admin | manual override |
+| `getAdminResults` | admin | preview ก่อน publish |
+| `publishResults` | admin | set `resultsPublished=TRUE`, `revealIndex=0` |
+| `setRevealState` | admin | { revealIndex, revealedTeam } — สำหรับปุ่ม TV |
+| `getRevealState` | – | public — sync TV |
+| `getResults` | – | public — list ที่ reveal แล้ว (ตาม `revealIndex`) |
+| `exportData` | admin | dump |
+
+> ❌ ลบ: `submitRound1Vote`, `submitRound2Vote`, `getJudgeContext` (เก่า), `computeRound1`, `computeRound2`, `setRound1Winner`, `setRound2Results`, `resetJudgeToken`
 
 ---
 
-## 12. Performance & Security
+## 9. Performance & Security
 
-- HTTPS เท่านั้น (GitHub Pages + Apps Script default)
-- ป้องกัน double-submit: ตรวจ `Judges.Voted = TRUE` ก่อนรับคะแนน
-- Apps Script LockService ป้องกัน race condition ตอนเขียน vote
-- Backup: Google Sheets มี version history ในตัว
+- HTTPS เท่านั้น
+- ป้องกัน double-submit ผ่าน `Voted=TRUE` ใน LockService
+- Apps Script LockService ทุก write
+- `localStorage.judge_id` กัน user เลือกชื่อใหม่หลังโหวต (UX guard เท่านั้น — server เป็น source of truth)
 
----
+## 10. แผนพัฒนา (V2 — 7 Phases)
 
-## 13. แผนการพัฒนา (12 Steps)
+ทำทีละ phase **หยุดรอ confirm หลังจบทุก phase**
 
-ทำทีละขั้น **หยุดรอ confirm หลังจบทุก step**
-
-1. ออกแบบ Google Sheets Schema ⬅️ **ปัจจุบัน**
-2. สร้าง Google Apps Script API
-3. สร้าง Admin Dashboard
-4. สร้างระบบกรรมการรอบที่ 1
-5. สร้างระบบคำนวณรอบที่ 1
-6. สร้างระบบกรรมการรอบที่ 2
-7. สร้าง Assignment Matching Algorithm
-8. สร้างระบบประกาศผล
-9. สร้าง Export PDF
-10. สร้าง Export Excel
-11. เชื่อม GitHub Pages
-12. ทดสอบระบบทั้งหมด
+1. **V1** ปรับ schema + spec + todo ⬅️ **ปัจจุบัน**
+2. **V2** Apps Script (ลบรอบเก่า, เพิ่ม shared-link, auto-compute)
+3. **V3** Judge UI ใหม่ (เลือกชื่อ → vote per award)
+4. **V4** Admin UI (toggle เดียว + แสดงผล Hungarian)
+5. **V5** Results TV Reveal Mode (state + effects)
+6. **V6** ปรับ Export PDF/Excel
+7. **V7** Test end-to-end + checklist

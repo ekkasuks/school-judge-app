@@ -6,13 +6,13 @@
 
 **ชื่อ:** school-judge-app
 **ลูกค้า:** โรงเรียนบ้านใหม่ (ระดับประถมศึกษา)
-**ระบบ:** Web App ตัดสินการประกวดชุดต่อต้านยาเสพติด 2 รอบ
-**สถานะปัจจุบัน:** Step 1 (ออกแบบ Schema) เสร็จ — รอ confirm ก่อน Step 2
+**ระบบ:** Web App ตัดสินการประกวดชุดต่อต้านยาเสพติด — **โหวตรอบเดียว**
+**สถานะปัจจุบัน:** V2 rework — Phase V1 (Schema/Spec) เสร็จ รอ confirm ก่อนเริ่ม Phase V2
 
 อ่านบริบทเสมอ:
-- [project-spec.md](project-spec.md) — สเปกเต็ม
-- [database-schema.md](database-schema.md) — โครงสร้าง Sheets 8 ชีต
-- [todo.md](todo.md) — แผน 12 Steps + checkbox
+- [project-spec.md](project-spec.md) — สเปก V2
+- [database-schema.md](database-schema.md) — โครงสร้าง Sheets 7 ชีต (V2)
+- [todo.md](todo.md) — แผน 7 Phases ใหม่
 
 ## วิธีทำงาน (สำคัญที่สุด)
 
@@ -100,26 +100,35 @@
     └── Config.gs
 ```
 
-## กฎเฉพาะของระบบนี้
+## กฎเฉพาะของระบบนี้ (V2)
 
-### รอบที่ 1
-- 7 ทีม, 3 กรรมการ
-- จัดอันดับ → คะแนน 7→1
-- Tiebreak: จำนวนอันดับ 1 > 2 > 3 → admin เลือก
-- ผู้ชนะ 1 รางวัล: "น่ารักจนกรรมการใจละลาย"
-- ผู้ชนะถูกตัดจากรอบ 2 อัตโนมัติ (`Status=Winner-Round1`)
+### โหวตรอบเดียว
+- 6 ทีม × 6 รางวัล × **11 กรรมการ**
+- กรรมการเปิดลิงก์เดียวกัน → **เลือกชื่อตัวเอง** → โหวต
+- UX: per award — แสดงรางวัลทีละใบ + ให้กรรมการเลือกทีมที่เหมาะกับรางวัลนั้น
+- คำนวณ **Hungarian Algorithm** บน vote count matrix 6×6 (bijection)
+- เป้าหมาย: max Σ votes — 1 ทีม ได้ 1 รางวัล ครบทุกทีม
 
-### รอบที่ 2
-- 6 ทีม (เหลือจากรอบ 1), 7 กรรมการ
-- 6 รางวัล (ดู [database-schema.md](database-schema.md#sheet-3-awards-รางวัล))
-- กรรมการเลือก 1 รางวัล/ทีม (อาจซ้ำได้)
-- คำนวณด้วย **Hungarian Algorithm** บน vote count matrix 6×6
-- เป้าหมาย: max Σ votes ภายใต้ bijection ทีม↔รางวัล
+### กรรมการ default (seed)
+1. ครูชมพู่ 2. ครูอ้อม 3. ครูอ้อน 4. ครูดาว 5. ครูแนน 6. ครูน๊อต
+7. ครูดิว 8. ครูเอก 9. ครูเบียร์ 10. ครูสา 11. ผอ.
 
-### Token กรรมการ
-- รูปแบบ: `judge-r{1|2}-{6 hex}` เช่น `judge-r1-a1b2c3`
-- ใช้ได้ครั้งเดียวต่อรอบ (`Voted=TRUE` lock)
-- Admin reset ได้ → gen ใหม่ + ลบ vote เก่า
+### Identity ของกรรมการ
+- ไม่มี token รายตัว — ใช้ลิงก์ shared `judge.html` (ไม่มี query string)
+- เก็บ `judge_id` ใน `localStorage` ของแต่ละเครื่อง
+- กัน double-submit ที่ server ผ่าน `Voted=TRUE` ใน `LockService`
+
+### TV Reveal Mode (results.html)
+- State อยู่ใน `Config`:
+  - `revealIndex`: 0..6 — รางวัลที่เปิดเผยล่าสุด
+  - `revealedTeam`: TRUE/FALSE — ในรางวัลปัจจุบัน เปิดทีมแล้วหรือยัง
+- Admin กดปุ่ม "ถัดไป" / "เปิดผล" → server update state → ทุก viewer poll ทุก 2 วินาที sync
+- effect: drumroll, confetti burst, scale animation
+
+### Auto-compute trigger
+- Admin set `Config.votingOpen = FALSE` → Apps Script auto-เรียก `computeResults()` ทันที
+- ผลลัพธ์เขียนลง `Results` 6 แถว
+- Admin override ภายหลังได้ใน UI (click-to-swap)
 
 ## ขั้นตอนทุกครั้งก่อนแก้โค้ด
 

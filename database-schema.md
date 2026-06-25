@@ -1,151 +1,139 @@
-# Database Schema — Google Sheets
+# Database Schema — Google Sheets (V2)
 
-> **Step 1 ของแผนพัฒนา** — ออกแบบโครงสร้างข้อมูลทั้งหมด
-
-ใช้ Google Spreadsheet 1 ไฟล์ (ชื่อ `school-judge-app-db`) ประกอบด้วย **8 sheet** ทุก sheet มี header ที่บรรทัด 1 และ column A เป็น primary key
+> **V2 — โหวตรอบเดียว** | 6 ทีม × 6 รางวัล × 11 กรรมการ
+> ใช้ Google Spreadsheet 1 ไฟล์ ประกอบด้วย **7 sheet** ทุก sheet มี header ที่บรรทัด 1, column A เป็น primary key
 
 ## กฎทั่วไป
 
-- ทุก ID ใช้ prefix สั้น อ่านง่ายในมือถือ (`T01`, `J01`, …)
+- ทุก ID ใช้ prefix สั้น อ่านง่าย (`T1`-`T6`, `J01`-`J11`, `A1`-`A6`)
 - วันที่/เวลา = ISO 8601 + timezone `+07:00`
 - Boolean = `TRUE` / `FALSE`
-- **ห้ามลบแถวที่มี ID แล้ว** ใช้คอลัมน์ `Active` หรือ `Status` แทน เพื่อรักษา foreign key
-- ทุก write ผ่าน Apps Script ใช้ `LockService.getScriptLock()` กันชนกัน
+- **ห้ามลบแถวที่มี ID แล้ว** ใช้ `Active` หรือ `Status` แทน
+- ทุก write ผ่าน Apps Script ใช้ `LockService.getScriptLock()`
 
 ---
 
 ## Sheet 1: `Teams` (ทีมที่เข้าประกวด)
 
+ทีมที่เข้าแข่ง 6 ทีม
+
 | col | field | type | required | ตัวอย่าง | หมายเหตุ |
 |-----|-------|------|----------|---------|-----------|
-| A | `TeamID` | string | ✓ | `T01` | PK |
+| A | `TeamID` | string | ✓ | `T1` | PK |
 | B | `TeamNumber` | int | ✓ | `1` | หมายเลขทีมบนเวที |
 | C | `TeamName` | string | ✓ | `เด็กดีสีขาว` | |
 | D | `School` | string | ✓ | `โรงเรียนบ้านใหม่` | |
-| E | `ImageURL` | string |  | `https://drive.google.com/uc?id=...` | URL จาก Drive (public view) |
-| F | `ImageFileID` | string |  | `1aBcDeFg...` | Drive file ID (ไว้ลบ/แทนรูป) |
-| G | `Order` | int | ✓ | `1` | ลำดับแสดง (admin ลาก reorder) |
-| H | `Status` | enum | ✓ | `Active` | `Active` / `Winner-Round1` / `Removed` |
+| E | `ImageURL` | string |  | `https://drive.google.com/uc?id=...` | URL จาก Drive |
+| F | `ImageFileID` | string |  | `1aBcDeFg...` | Drive file ID |
+| G | `Order` | int | ✓ | `1` | ลำดับแสดง |
+| H | `Status` | enum | ✓ | `Active` | `Active` / `Removed` |
 | I | `CreatedAt` | datetime | ✓ | | |
 | J | `UpdatedAt` | datetime | ✓ | | |
 
-**Status flow:**
-- `Active` → ทีมพร้อมแข่ง (ทั้ง 7 ทีมเริ่มที่นี่)
-- `Winner-Round1` → ชนะรอบ 1 → ถูกตัดออกจาก list ที่กรรมการรอบ 2 เห็นอัตโนมัติ
-- `Removed` → admin ลบ (soft delete)
-
 ---
 
-## Sheet 2: `Judges` (กรรมการ)
+## Sheet 2: `Judges` (กรรมการ 11 คน)
+
+ใช้ **ลิงก์เดียวกัน** ทุกคน → กรรมการเลือกชื่อตนเองในแอป
 
 | col | field | type | required | ตัวอย่าง | หมายเหตุ |
 |-----|-------|------|----------|---------|-----------|
 | A | `JudgeID` | string | ✓ | `J01` | PK |
-| B | `JudgeName` | string | ✓ | `อ.สมชาย รักเด็ก` | |
-| C | `Round` | int | ✓ | `1` | `1` หรือ `2` |
-| D | `Token` | string | ✓ | `judge-r1-a1b2c3` | unique, สร้างอัตโนมัติ |
-| E | `Voted` | bool | ✓ | `FALSE` | TRUE = ส่งคะแนนแล้ว (lock) |
-| F | `VotedAt` | datetime |  | | timestamp ตอนกดส่ง |
-| G | `Active` | bool | ✓ | `TRUE` | FALSE = ถูกลบ |
-| H | `CreatedAt` | datetime | ✓ | | |
+| B | `JudgeName` | string | ✓ | `ครูชมพู่` | ชื่อแสดงในรายการ |
+| C | `Order` | int | ✓ | `1` | ลำดับแสดงในรายการเลือกชื่อ |
+| D | `Voted` | bool | ✓ | `FALSE` | TRUE = ส่งคะแนนแล้ว (lock) |
+| E | `VotedAt` | datetime |  | | timestamp ตอนกดส่ง |
+| F | `Active` | bool | ✓ | `TRUE` | |
 
-**Constraint:** `Token` ต้องไม่ซ้ำ — Apps Script gen ด้วย `Utilities.getUuid().slice(0,6)` แล้วเช็คก่อน
+**Seed (ตามที่ผู้ใช้ระบุ):**
 
-**Reset token:** สร้าง token ใหม่ + set `Voted=FALSE` + ลบ vote เก่าของ JudgeID นี้ใน `Round1Votes` หรือ `Round2Votes`
+| JudgeID | JudgeName | Order |
+|---------|-----------|-------|
+| J01 | ครูชมพู่  | 1 |
+| J02 | ครูอ้อม   | 2 |
+| J03 | ครูอ้อน   | 3 |
+| J04 | ครูดาว   | 4 |
+| J05 | ครูแนน   | 5 |
+| J06 | ครูน๊อต  | 6 |
+| J07 | ครูดิว    | 7 |
+| J08 | ครูเอก    | 8 |
+| J09 | ครูเบียร์  | 9 |
+| J10 | ครูสา      | 10 |
+| J11 | ผอ.       | 11 |
+
+> 🔑 **ลิงก์โหวต:** `https://<pages>/judge.html` (ไม่มี token) → กรรมการเลือก JudgeID เอง
+> ป้องกันโหวตซ้ำด้วย `Voted=TRUE` + เก็บ JudgeID ใน `localStorage` ของเครื่องนั้น
 
 ---
 
-## Sheet 3: `Awards` (รางวัล)
+## Sheet 3: `Awards` (รางวัล 6 ประเภท)
 
 | col | field | type | required | ตัวอย่าง | หมายเหตุ |
 |-----|-------|------|----------|---------|-----------|
 | A | `AwardID` | string | ✓ | `A1` | PK |
-| B | `AwardName` | string | ✓ | `น่ารักจนกรรมการใจละลาย` | |
-| C | `Round` | int | ✓ | `1` | `1` หรือ `2` |
-| D | `Order` | int | ✓ | `1` | ลำดับแสดง |
+| B | `AwardName` | string | ✓ | `หลอนชุด ไม่หลอนยา` | |
+| C | `Order` | int | ✓ | `1` | ลำดับแสดง (= ลำดับ reveal) |
 
-**Seed data (7 แถว):**
+**Seed (รายชื่อเดิม):**
 
-| AwardID | AwardName | Round | Order |
-|---------|-----------|-------|-------|
-| A1 | น่ารักจนกรรมการใจละลาย | 1 | 1 |
-| A2 | หลอนชุด ไม่หลอนยา | 2 | 1 |
-| A3 | พลังจิ๋วแต่แจ๋ว | 2 | 2 |
-| A4 | เด็กทรงดี ไม่มีทรงยา | 2 | 3 |
-| A5 | โอ้โห ! ทำไปได้ | 2 | 4 |
-| A6 | เจ้าหนูพลังบวก | 2 | 5 |
-| A7 | ตัวตึงไม่พึ่งผง | 2 | 6 |
+| AwardID | AwardName | Order |
+|---------|-----------|-------|
+| A1 | หลอนชุด ไม่หลอนยา      | 1 |
+| A2 | พลังจิ๋วแต่แจ๋ว         | 2 |
+| A3 | เด็กทรงดี ไม่มีทรงยา    | 3 |
+| A4 | โอ้โห ! ทำไปได้          | 4 |
+| A5 | เจ้าหนูพลังบวก          | 5 |
+| A6 | ตัวตึงไม่พึ่งผง           | 6 |
 
 ---
 
-## Sheet 4: `Round1Votes` (คะแนนรอบที่ 1)
+## Sheet 4: `Votes` (คะแนนโหวต)
 
-แต่ละแถว = 1 กรรมการ จัดอันดับให้ 1 ทีม → กรรมการ 1 คน สร้าง 7 แถว
-
-| col | field | type | required | ตัวอย่าง | หมายเหตุ |
-|-----|-------|------|----------|---------|-----------|
-| A | `VoteID` | string | ✓ | `R1V0001` | PK, auto-increment |
-| B | `JudgeID` | string | ✓ | `J01` | FK → Judges (Round=1) |
-| C | `TeamID` | string | ✓ | `T03` | FK → Teams |
-| D | `Rank` | int | ✓ | `1` | 1–7 |
-| E | `Points` | int | ✓ | `7` | `8 - Rank` (1→7, 2→6, …, 7→1) |
-| F | `SubmittedAt` | datetime | ✓ | | |
-
-**Unique constraint:** `(JudgeID, TeamID)` และ `(JudgeID, Rank)` — Apps Script เช็ค
-
-**Insert logic:** เป็น atomic batch — Apps Script ลบของเก่า (ถ้ามี) แล้ว insert 7 แถวใหม่ใน transaction เดียวกัน (LockService)
-
----
-
-## Sheet 5: `Round2Votes` (คะแนนรอบที่ 2)
-
-แต่ละแถว = 1 กรรมการ เลือกรางวัลให้ 1 ทีม → กรรมการ 1 คน สร้าง 6 แถว
+แต่ละแถว = 1 กรรมการ เลือก 1 ทีม ให้ 1 รางวัล → กรรมการ 1 คน สร้าง 6 แถว
 
 | col | field | type | required | ตัวอย่าง | หมายเหตุ |
 |-----|-------|------|----------|---------|-----------|
-| A | `VoteID` | string | ✓ | `R2V0001` | PK |
-| B | `JudgeID` | string | ✓ | `J04` | FK → Judges (Round=2) |
-| C | `TeamID` | string | ✓ | `T02` | FK → Teams |
-| D | `AwardID` | string | ✓ | `A3` | FK → Awards (Round=2) |
+| A | `VoteID` | string | ✓ | `V0001` | PK, auto-increment |
+| B | `JudgeID` | string | ✓ | `J01` | FK → Judges |
+| C | `AwardID` | string | ✓ | `A3` | FK → Awards |
+| D | `TeamID` | string | ✓ | `T02` | FK → Teams |
 | E | `SubmittedAt` | datetime | ✓ | | |
 
-**Unique constraint:** `(JudgeID, TeamID)` — กรรมการเลือก 1 รางวัล ต่อ 1 ทีม
+**Unique constraint:** `(JudgeID, AwardID)` — 1 กรรมการ เลือก 1 ทีม ต่อ 1 รางวัล
 
-หมายเหตุ: 1 กรรมการสามารถเลือก `AwardID` เดียวกันให้หลายทีมได้ — เป็นการ "โหวต" ไม่ใช่ "assign"
+> ⚠️ 1 กรรมการ **อาจเลือกทีมเดียวกันให้หลายรางวัลได้** (เป็นการ "โหวต" ไม่ใช่ "assign")
 
 ---
 
-## Sheet 6: `Results` (ผลสรุปหลังคำนวณ)
+## Sheet 5: `Results` (ผลสรุปหลังคำนวณ Hungarian)
 
-cache ผลลัพธ์หลังคำนวณเสร็จ ใช้แสดงในหน้า public results
+cache ผลลัพธ์หลังปิดโหวต — bijection 1 ทีม : 1 รางวัล
 
 | col | field | type | required | ตัวอย่าง | หมายเหตุ |
 |-----|-------|------|----------|---------|-----------|
 | A | `ResultID` | string | ✓ | `RES1` | PK |
-| B | `Round` | int | ✓ | `1` | |
-| C | `AwardID` | string | ✓ | `A1` | |
-| D | `AwardName` | string | ✓ | `น่ารักจนกรรมการใจละลาย` | denorm เพื่อแสดงง่าย |
-| E | `TeamID` | string | ✓ | `T05` | ทีมผู้ชนะ |
+| B | `AwardID` | string | ✓ | `A1` | |
+| C | `AwardName` | string | ✓ | `หลอนชุด ไม่หลอนยา` | denorm |
+| D | `AwardOrder` | int | ✓ | `1` | ลำดับ reveal |
+| E | `TeamID` | string | ✓ | `T03` | ทีมผู้ชนะ |
 | F | `TeamName` | string | ✓ | `เด็กดีสีขาว` | denorm |
 | G | `School` | string | ✓ | `โรงเรียนบ้านใหม่` | denorm |
 | H | `ImageURL` | string |  | | denorm |
-| I | `Score` | float | ✓ | `18` | คะแนนรวม (รอบ 1) หรือ vote count (รอบ 2) |
+| I | `VoteCount` | int | ✓ | `5` | จำนวนเสียงที่ตรงรางวัลนี้ |
 | J | `ComputedAt` | datetime | ✓ | | |
-| K | `Note` | string |  | `admin override` | บันทึกถ้า admin แก้ผล |
+| K | `Note` | string |  | `admin override` | บันทึกถ้า admin แก้ |
 
-**เขียนเมื่อใด:** ทุกครั้งที่ admin กด "คำนวณผล" — clear แถวเก่าของ round นั้น แล้ว insert ใหม่
+**เขียนเมื่อใด:** ทันทีที่ admin **ปิดโหวต** (auto-compute Hungarian) — clear แถวเก่า แล้ว insert 6 แถวใหม่
 
 ---
 
-## Sheet 7: `Config` (การตั้งค่าระบบ)
-
-key-value store
+## Sheet 6: `Config` (key-value)
 
 | col | field | type | ตัวอย่าง |
 |-----|-------|------|---------|
-| A | `Key` | string | `round1Open` |
+| A | `Key` | string | `votingOpen` |
 | B | `Value` | string | `TRUE` |
-| C | `Description` | string | `เปิดให้กรรมการรอบ 1 ลงคะแนน` |
+| C | `Description` | string | `เปิดให้กรรมการลงคะแนน` |
 | D | `UpdatedAt` | datetime | |
 
 **Keys ที่ใช้ (seed):**
@@ -154,90 +142,75 @@ key-value store
 |-----|---------|----------|
 | `eventName` | `การประกวดชุดต่อต้านยาเสพติด - โรงเรียนบ้านใหม่` | ชื่องาน |
 | `eventDate` | `2026-06-26` | วันจัด |
-| `round1Open` | `FALSE` | เปิดให้รอบ 1 ลงคะแนน |
-| `round2Open` | `FALSE` | เปิดให้รอบ 2 ลงคะแนน |
-| `round1Computed` | `FALSE` | คำนวณรอบ 1 แล้ว |
-| `round2Computed` | `FALSE` | คำนวณรอบ 2 แล้ว |
-| `resultsPublished` | `FALSE` | เผยแพร่ผลสาธารณะ |
-| `currentRound` | `1` | รอบปัจจุบัน (1 หรือ 2) |
+| `votingOpen` | `FALSE` | เปิดให้กรรมการลงคะแนน |
+| `voteComputed` | `FALSE` | คำนวณ Hungarian แล้ว |
+| `resultsPublished` | `FALSE` | เริ่ม TV reveal mode |
+| `revealIndex` | `0` | รางวัลที่ reveal แล้ว (0..6) — กดปุ่ม "รางวัลถัดไป" เพิ่มทีละ 1 |
+| `revealedTeam` | `FALSE` | ในรางวัลปัจจุบัน reveal ชื่อทีมแล้วหรือยัง |
+
+> `revealIndex` + `revealedTeam` เป็นกลไก state ของ **TV mode** — sync ทุกหน้าจอผ่าน polling
 
 ---
 
-## Sheet 8: `Sessions` (admin tokens)
+## Sheet 7: `Sessions` (admin tokens)
 
-| col | field | type | ตัวอย่าง | หมายเหตุ |
-|-----|-------|------|---------|-----------|
-| A | `Token` | string | UUID | PK |
-| B | `Role` | string | `admin` | |
-| C | `CreatedAt` | datetime | | |
-| D | `ExpiresAt` | datetime | | createdAt + 8h |
+เหมือนเดิม — สำหรับ admin login เท่านั้น (กรรมการไม่ใช้)
 
-> Judge ไม่ใช้ Sheet นี้ — token ของ judge คือ token ถาวรใน `Judges.Token`
-> Apps Script เคลียร์ session หมดอายุแบบ lazy ทุกครั้งที่ admin login
-
----
-
-## ความสัมพันธ์ (ER Diagram)
-
-```
-       Config        Awards                 Sessions
-                       │
-                       │ Round=1 │ Round=2
-                       │         │
-   ┌─── Teams ◄───── R1Votes ───► Judges (Round=1)
-   │                  ▲
-   │                  └── R2Votes ──► Judges (Round=2)
-   │                                    ▲
-   └────── Results ◄────────────────────┘
-           (cache)
-```
+| col | field | type | ตัวอย่าง |
+|-----|-------|------|---------|
+| A | `Token` | string | UUID |
+| B | `Role` | string | `admin` |
+| C | `CreatedAt` | datetime | |
+| D | `ExpiresAt` | datetime | createdAt + 8h |
 
 ---
 
-## สูตรการคำนวณ
+## ความสัมพันธ์
 
-### รอบที่ 1
 ```
-สำหรับแต่ละทีม T (Status=Active):
-  totalScore[T] = SUM(Points where TeamID=T)
-  rank1Count[T] = COUNT(* where TeamID=T AND Rank=1)
-  rank2Count[T] = COUNT(* where TeamID=T AND Rank=2)
-  rank3Count[T] = COUNT(* where TeamID=T AND Rank=3)
-
-ผู้ชนะ = argmax โดย sort key (totalScore desc, rank1Count desc, rank2Count desc, rank3Count desc)
-
-ถ้ายังเสมอ → admin เลือก (set ใน Results.TeamID + Note='admin tiebreak')
-```
-
-### รอบที่ 2 — Assignment Matching
-```
-ทีม T (6 ทีม จาก Status=Active หลังตัด Winner-Round1) × รางวัล A (6 รางวัล Round=2)
-
-build matrix votes[t][a] = COUNT(R2Votes where TeamID=t AND AwardID=a)
-
-เป้าหมาย: หา assignment σ: teams → awards (bijection)
-          ที่ MAX Σ votes[t][σ(t)]
-
-ใช้ Hungarian Algorithm (O(n³), n=6 → เร็วมาก) — implement ใน Apps Script
+       Config       Sessions
+                       
+   ┌── Teams ◄── Votes ──► Judges
+   │              │
+   │              ▼
+   │           Awards
+   │
+   └── Results ◄─ (compute Hungarian จาก Votes)
 ```
 
 ---
 
-## ตัวอย่างข้อมูล seed (สำหรับทดสอบ)
+## สูตรการคำนวณ — Hungarian Assignment
 
-- **Teams:** 7 แถว (T01–T07), Status=`Active`, Order 1–7
-- **Awards:** 7 แถว ตามตารางด้านบน
-- **Judges:**
-  - รอบ 1: J01, J02, J03
-  - รอบ 2: J04, J05, J06, J07, J08, J09, J10
-- **Config:** 8 keys
-- **R1Votes / R2Votes / Results / Sessions:** ว่าง
+```
+สร้าง matrix votes[team][award] = COUNT(Votes where TeamID=team AND AwardID=award)
+  shape: 6 × 6
+
+หา assignment σ: awards → teams (bijection)
+  ที่ MAX Σ votes[σ(a)][a]
+
+ใช้ Hungarian (Kuhn-Munkres) บน cost = MAX_VAL - votes
+```
+
+> เรียกใน Apps Script ทันทีที่ Admin set `votingOpen=FALSE`
+> ผลลัพธ์เขียนลง `Results` 6 แถว + set `voteComputed=TRUE`
+
+---
+
+## ตัวอย่าง seed (สำหรับ Init.gs)
+
+- **Teams:** 6 แถว (T1–T6), Status=`Active`, Order 1–6
+- **Awards:** 6 แถว ตามตารางด้านบน
+- **Judges:** 11 แถว ตาม seed
+- **Config:** 7 keys
+- **Votes / Results / Sessions:** ว่าง
 
 ---
 
 ## หมายเหตุการ implement
 
-1. **Auto-increment ID:** ใช้ `Utilities.formatString('R1V%04d', lastId+1)`
-2. **Atomic batch insert:** `sheet.getRange(row, 1, n, cols).setValues(matrix)` ใน 1 call
-3. **Query แบบรวดเร็ว:** อ่าน `sheet.getDataRange().getValues()` ครั้งเดียวมา filter ใน memory ดีกว่าเรียก getRange หลายครั้ง
-4. **Image hosting บน Drive:** เก็บไฟล์ใน folder เดียว (`teams-images/`), set sharing = "Anyone with link can view", ใช้ URL `https://drive.google.com/uc?export=view&id={fileId}`
+1. **Auto-increment ID:** `Utilities.formatString('V%04d', lastId+1)`
+2. **Atomic batch insert:** กรรมการส่ง 6 votes พร้อมกัน — `sheet.setValues()` 1 call
+3. **Auto-compute trigger:** Apps Script ตรวจใน `setConfig` → ถ้า key=`votingOpen` และ value=`FALSE` → เรียก `computeResults()`
+4. **ป้องกัน double-submit:** double-check `Voted=TRUE` ภายใน `LockService`
+5. **Reveal state sync:** judge/results poll `Config.revealIndex` + `revealedTeam` เป็นหลัก

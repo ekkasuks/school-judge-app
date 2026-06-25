@@ -1,5 +1,5 @@
 /**
- * Code.gs — Entry point + router + helpers
+ * Code.gs — Entry point + router + helpers (V2 — single round)
  *
  * Web App endpoint: doPost
  * - รับ JSON body: { action, payload }
@@ -30,11 +30,13 @@ function getAllRows_(sheetName) {
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
   const headers = values[0];
-  return values.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
-    return obj;
-  });
+  return values.slice(1)
+    .filter(row => row.some(cell => cell !== '' && cell !== null))
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = row[i]; });
+      return obj;
+    });
 }
 
 function getHeaders_(sheetName) {
@@ -80,7 +82,7 @@ function jsonResponse_(obj) {
 /* ----- HTTP entry points ----- */
 
 function doGet(_e) {
-  return jsonResponse_({ ok: true, message: 'API running', version: '1.0.0' });
+  return jsonResponse_({ ok: true, message: 'API running', version: '2.0.0' });
 }
 
 function doPost(e) {
@@ -100,14 +102,18 @@ function doPost(e) {
   }
 }
 
-/* ----- Router ----- */
+/* ----- Router (V2) ----- */
 
 const ROUTES = {
-  // Auth & context
+  // Auth (admin)
   adminLogin: adminLogin,
-  getJudgeContext: getJudgeContext,
 
-  // Teams (admin)
+  // Judge — public, no token (ใช้ JudgeID)
+  getJudgesList: getJudgesList,
+  getVoteContext: getVoteContext,
+  submitVote: submitVote,
+
+  // Teams
   getTeams: getTeams,
   saveTeam: saveTeam,
   deleteTeam: deleteTeam,
@@ -117,29 +123,28 @@ const ROUTES = {
   // Judges (admin)
   getJudges: getJudges,
   saveJudge: saveJudge,
-  resetJudgeToken: resetJudgeToken,
   deleteJudge: deleteJudge,
+  reorderJudges: reorderJudges,
 
-  // Votes (judge)
-  submitRound1Vote: submitRound1Vote,
-  submitRound2Vote: submitRound2Vote,
-
-  // Results & dashboard (admin)
+  // Dashboard / Results (admin)
   getDashboard: getDashboard,
-  computeRound1: computeRound1,
-  setRound1Winner: setRound1Winner,
-  computeRound2: computeRound2,
-  setRound2Results: setRound2Results,
+  computeResults: computeResults,
+  setResults: setResults,
   getAdminResults: getAdminResults,
   publishResults: publishResults,
+  unpublishResults: unpublishResults,
+
+  // TV Reveal
+  setRevealState: setRevealState,
+  getRevealState: getRevealState,
 
   // Public
   getResults: getResults,
   getConfig: getConfig,
 
-  // Config (admin)
+  // Config (admin) — มี auto-trigger compute เมื่อปิดโหวต
   setConfig: setConfig,
 
-  // Export (admin)
+  // Export
   exportData: exportData,
 };

@@ -1,237 +1,209 @@
-# TODO — แผนพัฒนา 12 Steps
+# TODO — V2 Plan (Single Round)
 
-> ทำทีละ Step **หยุดรอ confirm หลังจบทุก step** ก่อนเริ่ม step ถัดไป
+> **V1–V10 ของแผนเดิมถูก rework** — เปลี่ยนเป็น 7 Phase ใหม่
+> ทำทีละ phase **หยุดรอ confirm หลังจบทุก phase**
 
 ✅ = เสร็จ • 🔄 = กำลังทำ • ⏸️ = รอ confirm • ⬜ = ยังไม่เริ่ม
 
 ---
 
-## Step 1 — ออกแบบ Google Sheets Schema ✅
+## Phase V1 — Schema + Spec + Todo ⏸️ รอ confirm
 
-- [x] กำหนด 8 sheet: `Teams`, `Judges`, `Awards`, `Round1Votes`, `Round2Votes`, `Results`, `Config`, `Sessions`
-- [x] กำหนดทุก column + type + constraint
-- [x] กำหนด ER relationships
-- [x] กำหนดสูตรคำนวณรอบ 1 (sort key + tiebreak)
-- [x] กำหนดสูตรคำนวณรอบ 2 (Hungarian assignment)
-- [x] กำหนด seed data ทั้งหมด (7 ทีม + 7 รางวัล + 3+7 กรรมการ + 8 config keys)
-- [x] เขียนลง [database-schema.md](database-schema.md)
-
-**Deliverable:** [database-schema.md](database-schema.md) ✓
-
----
-
-## Step 2 — สร้าง Google Apps Script API ⏸️ รอ confirm
-
-- [x] เขียนไฟล์ Apps Script ทั้ง 9 ไฟล์ใน [apps-script/](apps-script/)
-  - [x] `Code.gs` — entry `doPost`, router, helpers, lock
-  - [x] `Auth.gs` — adminLogin, validateAdmin, validateJudgeToken, getJudgeContext
-  - [x] `Teams.gs` — getTeams, saveTeam, deleteTeam, reorderTeams, uploadImage
-  - [x] `Judges.gs` — getJudges, saveJudge, deleteJudge, resetJudgeToken
-  - [x] `Votes.gs` — submitRound1Vote, submitRound2Vote (มี race-condition guard)
-  - [x] `Results.gs` — dashboard, computeRound1/2, setWinner, publish, export
-  - [x] `Hungarian.gs` — JV algorithm + `_testHungarian`
-  - [x] `Config.gs` — getConfig, setConfig
-  - [x] `Init.gs` — `initSpreadsheet()` + `seedSampleData()`
-- [x] เขียน [apps-script/README.md](apps-script/README.md) (setup steps)
-- [ ] **ต้องทำใน Google ฝั่งผู้ใช้:**
-  - [ ] สร้าง Spreadsheet + Drive folder
-  - [ ] paste โค้ดเข้า Apps Script editor
-  - [ ] ตั้ง Script Properties: `SPREADSHEET_ID`, `ADMIN_PASSWORD`, `DRIVE_FOLDER_ID`
-  - [ ] รัน `initSpreadsheet()`
-  - [ ] Deploy เป็น Web App + copy URL
+- [x] [database-schema.md](database-schema.md) — ใหม่ทั้งหมด 7 sheet
+  - [x] ลบ `Round1Votes`, `Round2Votes` → รวมเป็น `Votes` ก้อนเดียว
+  - [x] ลบ field `Round` จาก `Judges` + ลบ `Token` (ใช้ shared link)
+  - [x] ลบ status `Winner-Round1`
+  - [x] ลบรางวัล "น่ารักจนกรรมการใจละลาย" → เหลือ 6 รางวัล
+  - [x] เพิ่ม Config keys: `votingOpen`, `voteComputed`, `revealIndex`, `revealedTeam`
+  - [x] Seed: 11 กรรมการตามรายชื่อจริง (ครูชมพู่ ... ผอ.)
+- [x] [project-spec.md](project-spec.md) — V2 (single round, TV reveal mode)
+- [x] [todo.md](todo.md) — ไฟล์นี้
+- [x] [CLAUDE.md](CLAUDE.md) — ปรับให้สอดคล้องกับ V2
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 3 — Admin Dashboard ⏸️ รอ confirm
+## Phase V2 — Apps Script ⏸️ รอ confirm
 
-- [x] [index.html](index.html) — landing 3 ปุ่ม
-- [x] [css/style.css](css/style.css) — เสริม Tailwind (Sarabun font, no-scrollbar, tab-active, drag-handle)
-- [x] [js/config.js](js/config.js) — `API_URL` placeholder
-- [x] [js/api.js](js/api.js) — fetch wrapper, token helpers, toast, confirmDialog, blocker, fileToBase64
-- [x] [admin.html](admin.html) — login + 6 tabs + 3 modals
-- [x] [js/admin.js](js/admin.js):
-  - [x] login form + auto-resume token
-  - [x] tab switcher (6 tabs)
-  - [x] dashboard widgets (counts + progress bars + state badges)
-  - [x] realtime refresh 5s + session-expired handling
-  - [x] ทีม: เพิ่ม/แก้ไข/ลบ + อัปโหลด Drive + drag reorder (SortableJS)
-  - [x] กรรมการ: เพิ่ม/แก้ไข/ลบ + รีเซ็ต token + QR + copy ลิงก์
-  - [x] toggles: round1Open / round2Open / resultsPublished (มี confirm สำหรับ publish)
-- [x] Placeholder: tab "ผลคะแนน" + "Export" (เติมใน Step 5/7/9/10)
+### ลบโค้ดเก่า ✅
+- [x] ลบ `submitRound1Vote`, `submitRound2Vote`
+- [x] ลบ `computeRound1`, `setRound1Winner`, `computeRound2`, `setRound2Results`
+- [x] ลบ field `Round` + `Token` + `resetJudgeToken` + `generateJudgeToken_`
+- [x] ลบ `getJudgeContext` (V1) + `validateJudgeToken_`
+- [x] ไม่มี `Winner-Round1` references หลงเหลือ
 
-⏸️ รอ confirm
+### เพิ่มโค้ดใหม่ ✅
+- [x] [Auth.gs](apps-script/Auth.gs): `getJudgesList`, `getVoteContext(judgeId)`
+- [x] [Votes.gs](apps-script/Votes.gs): `submitVote` เดียว — atomic 6 rows + lock + double-check
+- [x] [Results.gs](apps-script/Results.gs): `computeResults` + `computeResultsInternal_` (no-lock)
+- [x] [Results.gs](apps-script/Results.gs): `publishResults` + `unpublishResults`
+- [x] [Results.gs](apps-script/Results.gs): `setRevealState` (admin) + `getRevealState` (public)
+- [x] [Results.gs](apps-script/Results.gs): `getResults` filter ตาม revealIndex/revealedTeam
+- [x] [Config.gs](apps-script/Config.gs) auto-trigger:
+  - [x] ปิดโหวต (TRUE→FALSE) → `computeResultsInternal_`
+  - [x] เปิดโหวตใหม่หลังคำนวณ → reset state ทั้งหมด
+- [x] [Judges.gs](apps-script/Judges.gs): `reorderJudges` (bonus)
 
----
+### ปรับ Init.gs ✅
+- [x] Schema 7 sheets (ลบ Round1Votes, Round2Votes, รวมเป็น Votes)
+- [x] Seed 6 รางวัล (ตัด "น่ารักจนกรรมการใจละลาย" ออก)
+- [x] Seed 11 กรรมการ: ครูชมพู่ ครูอ้อม ครูอ้อน ครูดาว ครูแนน ครูน๊อต ครูดิว ครูเอก ครูเบียร์ ครูสา ผอ.
+- [x] Seed Config 7 keys: votingOpen, voteComputed, resultsPublished, revealIndex, revealedTeam + eventName/eventDate
+- [x] `seedSampleTeams` — 6 ทีมตัวอย่าง
 
-## Step 4 — ระบบกรรมการรอบที่ 1 ⏸️ รอ confirm
+### อัปเดต README
+- [x] [apps-script/README.md](apps-script/README.md) — สอดคล้อง V2
 
-- [x] [judge.html](judge.html) — มี 6 state UI: loading / error / closed / done / round1 / round2(placeholder)
-- [x] [js/judge.js](js/judge.js) — state machine + drag & drop
-- [x] อ่าน `?token=` จาก URL → call `getJudgeContext`
-- [x] route ตาม Voted / roundOpen / round number
-- [x] รอบ 1: drag & drop ranking ด้วย SortableJS
-  - [x] การ์ดใหญ่ + รูป + หมายเลขทีม + ชื่อ + โรงเรียน
-  - [x] badge ลำดับ (1, 2, …) อัพเดตอัตโนมัติหลังลาก
-  - [x] sticky submit bar ค้างล่างจอ (safe-area-inset-bottom)
-  - [x] `delay: 80ms` กัน scroll พลาดเป็นการลาก
-- [x] ปุ่มส่งคะแนน → confirm modal → `submitRound1Vote`
-- [x] หลังส่ง → reload context → เข้า "ขอบคุณ" state อัตโนมัติ
-- [x] guard:
-  - [x] ไม่มี token → error screen
-  - [x] Voted=TRUE → "ขอบคุณ" state พร้อมเวลา VotedAt
-  - [x] roundOpen=FALSE → "ยังไม่เปิด" state + auto-poll ทุก 10s
+### Routes สรุป
+- 25 endpoints, ลบ 7 ตัวเก่า, เพิ่ม 9 ตัวใหม่ (รวม `unpublishResults`, `reorderJudges`)
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 5 — ระบบคำนวณรอบที่ 1 ⏸️ รอ confirm
+## Phase V3 — Judge UI ⏸️ รอ confirm
 
-- [x] Apps Script `computeRound1()` + `setRound1Winner()` (ทำใน Step 2)
-- [x] Admin UI ในแท็บ "ผลคะแนน":
-  - [x] แสดงสถานะ "ยังไม่คำนวณ" / "บันทึกแล้ว" + badge
-  - [x] ปุ่ม "🧮 คำนวณผลรอบ 1" → call `computeRound1`
-  - [x] ตารางพรีวิว: อันดับ + ชื่อทีม + คะแนน + อันดับ 1/2/3
-  - [x] ถ้าไม่เสมอ → winner card + ปุ่ม "บันทึก" inline
-  - [x] ถ้าเสมอ → tie-break modal + radio + ช่อง note + ยืนยัน
-  - [x] หลังบันทึก → reload Results + Teams + Dashboard
-  - [x] ถ้าคำนวณซ้ำหลังบันทึกแล้ว → confirm overwrite
-- [x] หน้า winner card (saved state) แสดง: รูป + ชื่อทีม + คะแนน + note
-- [x] [admin.html](admin.html) เพิ่ม `#tie-modal`
-- [x] [js/admin.js](js/admin.js) เพิ่ม section RESULTS — Round 1
-
-⏸️ รอ confirm
-
----
-
-## Step 6 — ระบบกรรมการรอบที่ 2 ⏸️ รอ confirm
-
-- [x] reuse `judge.html` (เพิ่ม `state-round2` มี 2 view: form + review)
-- [x] state machine ภายในรอบ 2: form (ทีละทีม) ↔ review (สรุป)
-- [x] หน้าทีละทีม: รูปใหญ่ 48×48 + #หมายเลข + ชื่อ + โรงเรียน + radio 6 รางวัล
-- [x] progress bar + ข้อความ "ทีม X / N"
-- [x] sticky bottom: ปุ่ม "← ก่อนหน้า" / "ถัดไป →"
-- [x] บังคับเลือกก่อนถัดไป (toast เตือน)
-- [x] หน้า review: list ทุกทีม + รางวัลที่เลือก, คลิกแถวเพื่อกระโดดไปแก้ไข
-- [x] localStorage draft cache (`r2_draft_<token>`) กันหลุดเมื่อรีเฟรช
-- [x] confirm modal ก่อน submit → `submitRound2Vote({ votes })`
-- [x] หลังส่งสำเร็จ → ลบ draft + reload context → เข้า "ขอบคุณ" state
+- [x] [judge.html](judge.html) ใหม่ทั้งหมด — 6 state UI:
+  - [x] `loading` / `error` (มีปุ่ม retry)
+  - [x] `pick-name` — grid 11 ชื่อกรรมการ (2 col mobile, 3 col tablet)
+    - [x] กรรมการที่ Voted=TRUE → grey + "✅ ส่งแล้ว" + disabled
+    - [x] banner "ยังไม่เปิดให้ลงคะแนน" ถ้า votingOpen=FALSE (เลือกชื่อล่วงหน้าได้)
+  - [x] `closed` — voting ยังไม่เปิด + auto-poll 10s + ปุ่มเปลี่ยนชื่อ
+  - [x] `done` — ✅ ขอบคุณ + เวลาส่ง
+  - [x] `vote` มี 2 sub-view:
+    - [x] form: การ์ดรางวัล gradient ใหญ่ + 6 ทีม + radio + sticky bottom nav
+    - [x] review: list 6 รางวัล + ทีมที่เลือก + คลิกแก้
+- [x] [js/judge.js](js/judge.js) ใหม่ — state machine + draft cache
+- [x] localStorage:
+  - [x] `judge_id` — JudgeID ที่เลือก
+  - [x] `judge_draft_<judgeId>` — { votes: {awardId: teamId}, awardIndex }
+- [x] ปุ่ม "ไม่ใช่ฉัน?" — top-right ในหน้า vote + ในหน้า closed → กลับ pick-name
+- [x] Pre-submit validation: ตรวจครบทุกรางวัล, ถ้าขาด → กระโดดไปแก้
+- [x] Edge cases handled:
+  - [x] judge ถูกลบจาก admin → `ไม่พบกรรมการ` → clear localStorage → กลับ pick-name
+  - [x] voting ปิดกลางคัน → server reject + toast error
+  - [x] รีเฟรชระหว่างกรอก → draft restore
+  - [x] Pick-name auto-refresh — เห็น real-time ใครส่งแล้ว
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 7 — Assignment Matching Algorithm ⏸️ รอ confirm
+## Phase V4 — Admin UI ⏸️ รอ confirm
 
-- [x] Apps Script (ใน Step 2):
-  - [x] `Hungarian.gs` — JV algorithm + `_testHungarian` ตัวอย่าง
-  - [x] `computeRound2()` build matrix + เรียก Hungarian
-  - [x] `setRound2Results()` รับ assignment + บันทึก
-- [x] Admin UI ในแท็บ "ผลคะแนน":
-  - [x] แสดงสถานะ "ยังไม่ได้คำนวณ" / "บันทึกแล้ว"
-  - [x] กรณีบันทึกแล้ว — grid 6 การ์ด (รางวัล → ทีม + คะแนน + note ถ้า override)
-  - [x] ปุ่ม "🧮 คำนวณผลรอบ 2" → call `computeRound2`
-  - [x] พรีวิว: ผลรวมเสียง + ป้าย "Hungarian optimal" หรือ "admin สลับ N คู่"
-  - [x] Vote matrix table (collapsible) — highlight cell ที่เป็น assignment
-  - [x] Assignment grid 6 การ์ด — click-to-swap (2 ครั้งสลับ)
-  - [x] swap → mark `overridden=true` → note=admin override
-  - [x] ปุ่ม "บันทึกผลรอบ 2" → confirm → `setRound2Results`
-  - [x] หลังบันทึก → reload Results + Dashboard
-
-⏸️ รอ confirm
-
----
-
-## Step 8 — ระบบประกาศผล (Public Results) ⏸️ รอ confirm
-
-- [x] [results.html](results.html) — 3 state (loading / pending / results) ไม่ต้อง login
-- [x] [js/results.js](js/results.js) — poll + render + confetti
-- [x] poll `getResults` ทุก 10 วินาที
-- [x] ถ้า `resultsPublished=FALSE` → "ยังไม่ประกาศผล" + auto-refresh
-- [x] รอบ 1: hero card สีทอง 👑 รูปใหญ่ + ชื่อทีม + คะแนนรวม
-- [x] รอบ 2: grid responsive (1 col mobile, 2 col sm+) 6 การ์ดรางวัล
-- [x] CSS animations:
-  - [x] fade-in การ์ดเรียงทีละใบ (`animation-delay`)
-  - [x] confetti CSS-only — gen 24-40 ชิ้นด้วย JS, สีสุ่ม + duration สุ่ม
-- [x] mobile-first responsive
-- [x] diff-detection: poll signature → ไม่ re-render ถ้าผลเหมือนเดิม → ไม่กระตุก
-- [x] กราเชียส: ถ้า admin ถอด publish ระหว่าง show → กลับไป pending state
+- [x] [admin.html](admin.html) — rewrite ทั้งไฟล์
+  - [x] Tabs: Dashboard / ทีม / กรรมการ / ควบคุม / ผลคะแนน / Export (ตัด TV ออก — อยู่ใน results.html)
+  - [x] Dashboard: progress bar เดียว (X/N กรรมการ) + state row 4 บรรทัด (votingOpen, voteComputed, resultsPublished, revealIndex)
+  - [x] Tab ทีม: เหมือนเดิม (drag reorder + image upload)
+  - [x] Tab กรรมการ: shared-link card 📋 บนสุด + list กรรมการ (no QR, no per-judge link)
+  - [x] Tab ควบคุม: 2 toggles (`votingOpen`, `resultsPublished`) + คำเตือน
+  - [x] Tab ผลคะแนน: เหลือ section เดียว (Hungarian preview + click-to-swap + บันทึก)
+  - [x] Tab Export: ปุ่ม disabled พร้อมข้อความ "รอ Phase V6"
+  - [x] ลบ tie-modal + link-modal + qrcode CDN
+  - [x] Modal กรรมการ: ลบ field "รอบ" — เหลือชื่อเท่านั้น
+- [x] [js/admin.js](js/admin.js) — rewrite ทั้งไฟล์
+  - [x] ลบ judge token/QR logic, bindLinkModal, showJudgeLink
+  - [x] ลบ r1Local + section "Round 1"
+  - [x] ลบ progress bar รอบ 1
+  - [x] ลบ tie-break logic (ไม่มีรอบ 1 แล้ว)
+  - [x] resultLocal เดียว — preview + swap + save
+  - [x] Toggle `votingOpen` ปิด → confirm + auto-compute report toast
+  - [x] Toggle `votingOpen` เปิดหลังคำนวณ → confirm reset
+  - [x] Toggle `resultsPublished` → เรียก `publishResults`/`unpublishResults` (reset revealIndex)
+  - [x] Share link: `${origin}${path}judge.html` + copy to clipboard
+- [x] ตรวจไม่มี V1 references หลงเหลือ (grep clean)
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 9 — Export PDF ⏸️ รอ confirm
+## Phase V5 — Results TV Reveal Mode ⏸️ รอ confirm
 
-- [x] เพิ่ม CDN: jsPDF 2.5.2 + html2canvas 1.4.1 ใน [admin.html](admin.html)
-- [x] [js/export-pdf.js](js/export-pdf.js) — แยกออกจาก admin.js
-- [x] ปุ่ม "📄 Export PDF" ในแท็บ Export → bind ใน admin.js
-- [x] 4 section / 4 หน้า:
-  - [x] หน้าปก: 🏆 + ชื่องาน + โรงเรียน + วันที่ + timestamp
-  - [x] สรุปผู้ได้รับรางวัล (7 รางวัล, ตารางพร้อม emoji แยกรอบ)
-  - [x] คะแนนรอบ 1: matrix (ทีม × กรรมการ) + คอลัมน์รวม + 1/2/3
-  - [x] คะแนนรอบ 2: vote matrix + assignment summary
-- [x] **ไทยใช้ได้** — html2canvas capture Sarabun font ที่ browser render แล้ว (ไม่ต้อง embed .ttf)
-- [x] รองรับรูปข้ามต้นทาง (`useCORS: true`) + `waitImages` รอโหลด
-- [x] auto-fit section ลงหน้า A4 (scale ลงถ้าสูงเกิน)
-- [x] ตั้งชื่อไฟล์ `รายงานผล-YYYYMMDD.pdf`
-
-⏸️ รอ confirm
-
----
-
-## Step 10 — Export Excel ⏸️ รอ confirm
-
-- [x] เพิ่ม CDN SheetJS 0.18.5 ใน [admin.html](admin.html)
-- [x] [js/export-xlsx.js](js/export-xlsx.js) — แยกออกจาก admin.js
-- [x] ปุ่ม "📊 Export Excel" ในแท็บ Export → bind ใน admin.js
-- [x] 5 sheets:
-  - [x] **สรุปผลรางวัล** — 7 รางวัล (ลำดับ, รอบ, รางวัล, ทีม, หมายเลข, โรงเรียน, คะแนน, note, ComputedAt)
-  - [x] **คะแนนรอบ 1** — matrix (ทีม × กรรมการ) + คอลัมน์รวม + อันดับ 1/2/3 + เรียงตาม tiebreak
-  - [x] **คะแนนรอบ 2** — vote matrix + คอลัมน์ "รางวัลที่ได้" + "เสียงที่ตรงรางวัล" + note
-  - [x] **กรรมการ** — JudgeID + ชื่อ + รอบ + สถานะ + เวลาส่ง + Token
-  - [x] **ทีม** — TeamID + หมายเลข + ชื่อ + โรงเรียน + สถานะแปลไทย
-- [x] auto-fit column width (จากความยาวเนื้อหา, cap 40)
-- [x] ตั้งชื่อไฟล์ `รายงานผล-YYYYMMDD.xlsx`
-- [x] รองรับชื่อ sheet ภาษาไทย + truncate 31 ตัวอักษร
+- [x] [results.html](results.html) — rewrite, full-screen friendly, ธีม dark + festive gradient
+- [x] [js/results.js](js/results.js) — state machine + animations + admin bar + audio
+- [x] poll `getResults` ทุก 2 วินาที (รวม revealIndex + revealedTeam ใน response เดียว)
+- [x] State view 6 states:
+  - [x] `loading` — spinner เริ่มต้น
+  - [x] `not-published` — 🤫 + "ยังไม่ประกาศผล"
+  - [x] `intro` — 🎉 + ชื่องาน + pulse-glow CTA
+  - [x] `award-name` — รางวัลที่ X + 🏆 ใหญ่ + ชื่อรางวัล + drumroll
+  - [x] `award-team` — รูป 56×56 (mobile) → 72×72 (desktop) + ชื่อทีม + เสียง + confetti
+  - [x] `final` — grid 6 รางวัล + ทีม + confetti + fanfare
+- [x] Animations:
+  - [x] `reveal-in` (translateY + scale + fade)
+  - [x] `scale-in` (bounce cubic-bezier)
+  - [x] `pulse-glow` (text-shadow infinite)
+  - [x] `text-glow-gold` (อมพลเงาทอง)
+- [x] Confetti: 30-60 ชิ้น (ตามขนาดหน้าจอ), CSS-only, auto cleanup 10s
+- [x] Audio (best-effort):
+  - [x] AudioContext synthesize — drumroll (sawtooth descending) + fanfare (C major triad triangle)
+  - [x] resume on first user gesture (Safari/Chrome autoplay policy)
+- [x] Admin control bar (gated โดย `admin_token` ใน localStorage):
+  - [x] แถบล่างจอ + เครื่องหมาย "🛠 Admin" + state label
+  - [x] ปุ่มหลัก: "เริ่มประกาศ" / "เปิดผล" / "รางวัลถัดไป" / "ดูสรุป" / "เริ่มใหม่"
+  - [x] ปุ่ม "← ย้อน" — ถอย state (await error scenarios)
+  - [x] handle session-expired → reload
+- [x] Top badge (sticky) แสดง event name + progress "X / N"
+- [x] Smart signature diffing — ไม่ render ซ้ำเมื่อไม่เปลี่ยน state
+- [x] อัปเดต admin.html note ในแท็บควบคุม — ชี้ไป results.html พร้อมแถบควบคุม
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 11 — เชื่อม GitHub Pages ⬜
+## Phase V6 — Export ⏸️ รอ confirm
 
-- [ ] init git, push code
-- [ ] เปิด GitHub Pages (Settings → Pages → main branch)
-- [ ] verify URL
-- [ ] ใส่ `API_URL` (Apps Script Web App URL) ใน `js/config.js`
-- [ ] ทดสอบเปิดบนมือถือจริง
+- [x] [js/export-pdf.js](js/export-pdf.js) — rewrite ทั้งไฟล์ V2
+  - [x] ลบ buildRound1Section + buildRound2Section
+  - [x] 3 หน้า: ปก / สรุปรางวัล (6) / Vote Matrix + Assignment
+  - [x] ใช้ V2 fields: `data.votes`, `r.VoteCount`, `r.AwardOrder`
+- [x] [js/export-xlsx.js](js/export-xlsx.js) — rewrite ทั้งไฟล์ V2
+  - [x] 4 sheets (ลบ "คะแนนรอบ 1"):
+    - [x] สรุปผลรางวัล
+    - [x] Vote Matrix (มี totals row ล่างสุด)
+    - [x] กรรมการ (Order + สถิติ "X/Y" ล่างสุด)
+    - [x] ทีม (Active/Removed เท่านั้น — ไม่มี Winner-Round1)
+  - [x] ใช้ V2 fields เหมือนกัน
+- [x] [admin.html](admin.html) — เปิดปุ่ม Export (ลบ disabled)
+  - [x] ปุ่ม "📄 Export PDF" + caption บอกหน้า
+  - [x] ปุ่ม "📊 Export Excel" + caption บอกชีต
+  - [x] เพิ่ม `<script src="js/export-pdf.js">` + `export-xlsx.js`
+- [x] [js/admin.js](js/admin.js) — bind ปุ่มใน `boot()`
+- [x] ตรวจ collision: `indexBy` ซ้ำใน 2 ไฟล์ (identical — ปลอดภัย)
 
 ⏸️ รอ confirm
 
 ---
 
-## Step 12 — ทดสอบระบบทั้งหมด ⬜
+## Phase V7 — Test & Audit ⏸️ รอ confirm
 
-- [ ] **Smoke test:** admin login → เพิ่ม 7 ทีม + 3+7 กรรมการ
-- [ ] **รอบ 1 E2E:** กรรมการ 3 คนจาก 3 มือถือลงคะแนน → คำนวณ → ผู้ชนะถูกต้อง
-- [ ] **Tiebreak test:** force ให้คะแนนเท่ากัน → ตรวจสอบ tiebreak rules
-- [ ] **รอบ 2 E2E:** ทีมเหลือ 6, กรรมการ 7 ลงคะแนน → Hungarian → ทุกทีมได้ 1 รางวัล
-- [ ] **Token reuse guard:** กรรมการเข้าลิงก์เดิมหลังส่งแล้ว → ต้อง lock
-- [ ] **Concurrency:** กรรมการ 5 คนกด submit พร้อมกัน → ทุกคนสำเร็จ ไม่มี race condition
-- [ ] **Mobile:** test บน iPhone Safari + Android Chrome
-- [ ] **Public results:** ดูบนมือถือ + desktop
-- [ ] **Export:** PDF ภาษาไทยอ่านได้, Excel เปิดได้ใน Google Sheets
-- [ ] **Load:** ทดสอบ 20 คนลงคะแนนพร้อมกัน
+### Static Audit (ฝั่ง Claude — ผ่านทั้งหมด)
+- [x] Frontend `api()` calls ↔ Backend ROUTES — 21 calls ตรงทุกตัว
+- [x] DOM IDs: judge.html ↔ judge.js — match
+- [x] DOM IDs: admin.html ↔ admin.js — match (`tab-` + `result-save-btn` dynamic)
+- [x] DOM IDs: results.html ↔ results.js — perfect match
+- [x] Apps Script cross-file helpers — 19 ตัวมี definition ครบ
+- [x] CDN libraries: admin.html มี Sortable/jsPDF/html2canvas/SheetJS, judge.html มีเฉพาะ Tailwind (ลบ Sortable แล้ว — V2 ไม่ใช้)
+- [x] grep V1 leftover — โค้ดสะอาด (เหลือ refs ใน todo.md เป็น changelog เท่านั้น)
+- [x] [README.md](README.md) — อัปเดต flow V2 (โหวตรอบเดียว, 11 กรรมการ, TV reveal)
 
----
+### Test Checklist for User
+- [x] [TEST-CHECKLIST.md](TEST-CHECKLIST.md) — 10 sections, 100+ checkpoints
+  - [x] 0. Pre-deploy setup (Spreadsheet, Drive, Apps Script, init, deploy)
+  - [x] 1. Backend smoke test (doGet, adminLogin, getJudgesList curl)
+  - [x] 2. Admin UI (login, dashboard, teams CRUD, judges, controls)
+  - [x] 3. Judge flow (pick-name, vote, draft restore, lock guard, change name)
+  - [x] 4. Auto-compute (close vote → Hungarian → Results sheet)
+  - [x] 5. Admin override swap
+  - [x] 6. Publish + TV reveal (intro → award-name → award-team → final)
+  - [x] 7. Reopen voting (reset)
+  - [x] 8. Export PDF + Excel
+  - [x] 9. Mobile + cross-device
+  - [x] 10. Edge cases (race, session expire, network drop)
 
-## Stretch Goals (ทำถ้ามีเวลา)
+### Limitations
+- ⚠️ Static audit only — ระบบ live ยังไม่ได้ deploy บน Apps Script + GitHub Pages
+- ⚠️ User ต้องรัน TEST-CHECKLIST.md หลัง deploy เพื่อ confirm runtime behavior
 
-- [ ] QR code สำหรับลิงก์กรรมการ (qrcode.js CDN)
-- [ ] dark mode toggle
-- [ ] confetti animation ตอนประกาศผล
-- [ ] เสียง fanfare ตอน reveal
-- [ ] ภาพถ่ายผู้ชนะถ่ายสดผ่านมือถือ
+⏸️ รอ confirm

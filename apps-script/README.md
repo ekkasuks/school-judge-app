@@ -44,7 +44,7 @@
 - เลือก function `initSpreadsheet` ในเมนู → กด **Run**
 - อนุญาตสิทธิ์เมื่อขอ (ครั้งแรก)
 - ตรวจ Spreadsheet → ควรเห็น 8 sheet พร้อม headers และ Awards/Config มี seed data
-- (ทางเลือก) รัน `seedSampleData` เพื่อเพิ่ม 7 ทีม + 10 กรรมการตัวอย่าง
+- (ทางเลือก) รัน `seedSampleTeams` เพื่อเพิ่มทีมตัวอย่าง 6 ทีม (กรรมการ 11 คน seed อัตโนมัติแล้ว)
 
 ### 6) Test ด้วยฟังก์ชัน built-in
 - เปิด `Hungarian.gs` → รัน `_testHungarian` → ดู Logger (View → Logs)
@@ -74,14 +74,14 @@ curl -L -X POST '<WEB_APP_URL>' \
 | ไฟล์ | หน้าที่ |
 |------|--------|
 | `Code.gs` | entry `doPost`, router, helpers (getSheet, withLock, jsonResponse) |
-| `Auth.gs` | admin login, session, judge token validate, getJudgeContext |
+| `Auth.gs` | admin login, session, getJudgesList (public), getVoteContext |
 | `Teams.gs` | CRUD ทีม + reorder + uploadImage ไป Drive |
-| `Judges.gs` | CRUD กรรมการ + token gen/reset |
-| `Votes.gs` | submitRound1Vote, submitRound2Vote |
-| `Results.gs` | dashboard, computeRound1/2, setWinner, publish, export |
-| `Hungarian.gs` | assignment algorithm สำหรับรอบ 2 |
-| `Config.gs` | key-value config |
-| `Init.gs` | ตั้งค่า spreadsheet เริ่มต้น + seed data |
+| `Judges.gs` | CRUD กรรมการ + reorder (V2: ไม่มี token, ใช้ shared link) |
+| `Votes.gs` | submitVote — 1 กรรมการ ส่ง 6 vote ในครั้งเดียว |
+| `Results.gs` | dashboard, computeResults (Hungarian), TV reveal state, publish, export |
+| `Hungarian.gs` | assignment algorithm (Kuhn-Munkres) |
+| `Config.gs` | key-value config + auto-trigger (ปิดโหวต = auto-คำนวณ) |
+| `Init.gs` | ตั้งค่า spreadsheet เริ่มต้น + seed 6 รางวัล + 11 กรรมการ |
 
 ## API endpoints (ทุก action ใช้ POST /)
 

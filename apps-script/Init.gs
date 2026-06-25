@@ -1,31 +1,33 @@
 /**
- * Init.gs — สร้าง Spreadsheet ทั้งหมดให้พร้อมใช้งานในคลิกเดียว
+ * Init.gs — สร้าง Spreadsheet ให้พร้อมใช้งานในคลิกเดียว (V2)
  *
  * วิธีใช้:
- *   1. สร้าง Google Spreadsheet ใหม่ (เปิดเปล่า ๆ ก็พอ)
+ *   1. สร้าง Google Spreadsheet ใหม่
  *   2. Extensions → Apps Script → paste โค้ดทั้งหมด
  *   3. ตั้ง Script Properties:
- *        SPREADSHEET_ID = id ของ spreadsheet ที่เพิ่งสร้าง
+ *        SPREADSHEET_ID = id ของ spreadsheet
  *        ADMIN_PASSWORD = รหัสผ่าน admin
- *        DRIVE_FOLDER_ID = folder ของ Drive สำหรับเก็บรูป (สร้างเอง)
+ *        DRIVE_FOLDER_ID = folder ของ Drive สำหรับเก็บรูป
  *   4. รัน initSpreadsheet() ครั้งเดียว
- *   5. Deploy → New deployment → Web app
+ *   5. (ทางเลือก) รัน seedSampleTeams() เพิ่มทีมตัวอย่าง 6 ทีม
+ *   6. Deploy → New deployment → Web app
  *        Execute as: Me
  *        Who has access: Anyone
- *   6. copy Web app URL → ใส่ใน /js/config.js
+ *   7. คัดลอก Web App URL → ใส่ใน /js/config.js
+ *
+ * ⚠️ initSpreadsheet() จะ **clear** ทุก sheet — ใช้ตอนเริ่มต้นเท่านั้น
  */
 
 function initSpreadsheet() {
   const ss = getSS_();
 
   const sheets = [
-    { name: 'Teams', headers: ['TeamID','TeamNumber','TeamName','School','ImageURL','ImageFileID','Order','Status','CreatedAt','UpdatedAt'] },
-    { name: 'Judges', headers: ['JudgeID','JudgeName','Round','Token','Voted','VotedAt','Active','CreatedAt'] },
-    { name: 'Awards', headers: ['AwardID','AwardName','Round','Order'] },
-    { name: 'Round1Votes', headers: ['VoteID','JudgeID','TeamID','Rank','Points','SubmittedAt'] },
-    { name: 'Round2Votes', headers: ['VoteID','JudgeID','TeamID','AwardID','SubmittedAt'] },
-    { name: 'Results', headers: ['ResultID','Round','AwardID','AwardName','TeamID','TeamName','School','ImageURL','Score','ComputedAt','Note'] },
-    { name: 'Config', headers: ['Key','Value','Description','UpdatedAt'] },
+    { name: 'Teams',    headers: ['TeamID','TeamNumber','TeamName','School','ImageURL','ImageFileID','Order','Status','CreatedAt','UpdatedAt'] },
+    { name: 'Judges',   headers: ['JudgeID','JudgeName','Order','Voted','VotedAt','Active'] },
+    { name: 'Awards',   headers: ['AwardID','AwardName','Order'] },
+    { name: 'Votes',    headers: ['VoteID','JudgeID','AwardID','TeamID','SubmittedAt'] },
+    { name: 'Results',  headers: ['ResultID','AwardID','AwardName','AwardOrder','TeamID','TeamName','School','ImageURL','VoteCount','ComputedAt','Note'] },
+    { name: 'Config',   headers: ['Key','Value','Description','UpdatedAt'] },
     { name: 'Sessions', headers: ['Token','Role','CreatedAt','ExpiresAt'] },
   ];
 
@@ -41,52 +43,68 @@ function initSpreadsheet() {
     sheet.setFrozenRows(1);
   });
 
-  // ลบ Sheet1 ถ้ายังอยู่
+  // ลบ Sheet1 ที่ Google สร้างให้ตอน new spreadsheet
   const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('ชีต1');
   if (def && ss.getSheets().length > 1) {
     ss.deleteSheet(def);
   }
 
-  // Seed: Awards
+  // ── Seed: Awards (6 รางวัล) ──
   const awardsSheet = ss.getSheetByName('Awards');
-  awardsSheet.getRange(2, 1, 7, 4).setValues([
-    ['A1', 'น่ารักจนกรรมการใจละลาย', 1, 1],
-    ['A2', 'หลอนชุด ไม่หลอนยา',      2, 1],
-    ['A3', 'พลังจิ๋วแต่แจ๋ว',        2, 2],
-    ['A4', 'เด็กทรงดี ไม่มีทรงยา',   2, 3],
-    ['A5', 'โอ้โห ! ทำไปได้',         2, 4],
-    ['A6', 'เจ้าหนูพลังบวก',         2, 5],
-    ['A7', 'ตัวตึงไม่พึ่งผง',         2, 6],
+  awardsSheet.getRange(2, 1, 6, 3).setValues([
+    ['A1', 'หลอนชุด ไม่หลอนยา',   1],
+    ['A2', 'พลังจิ๋วแต่แจ๋ว',      2],
+    ['A3', 'เด็กทรงดี ไม่มีทรงยา', 3],
+    ['A4', 'โอ้โห ! ทำไปได้',       4],
+    ['A5', 'เจ้าหนูพลังบวก',       5],
+    ['A6', 'ตัวตึงไม่พึ่งผง',       6],
   ]);
 
-  // Seed: Config
+  // ── Seed: Judges (11 คนตามรายชื่อจริง) ──
+  const judgesSheet = ss.getSheetByName('Judges');
+  const judgeNames = [
+    'ครูชมพู่', 'ครูอ้อม', 'ครูอ้อน', 'ครูดาว',
+    'ครูแนน', 'ครูน๊อต', 'ครูดิว', 'ครูเอก',
+    'ครูเบียร์', 'ครูสา', 'ผอ.',
+  ];
+  const judgeRows = judgeNames.map((name, i) => [
+    'J' + String(i + 1).padStart(2, '0'),
+    name,
+    i + 1,    // Order
+    false,    // Voted
+    '',       // VotedAt
+    true,     // Active
+  ]);
+  judgesSheet.getRange(2, 1, judgeRows.length, 6).setValues(judgeRows);
+
+  // ── Seed: Config (7 keys) ──
   const configSheet = ss.getSheetByName('Config');
   const ts = nowIso_();
-  configSheet.getRange(2, 1, 8, 4).setValues([
-    ['eventName',         'การประกวดชุดต่อต้านยาเสพติด - โรงเรียนบ้านใหม่', 'ชื่องาน',                ts],
-    ['eventDate',         '2026-06-26',                                      'วันจัดงาน (yyyy-mm-dd)', ts],
-    ['round1Open',        'FALSE',                                            'เปิดให้กรรมการรอบ 1 ลงคะแนน', ts],
-    ['round2Open',        'FALSE',                                            'เปิดให้กรรมการรอบ 2 ลงคะแนน', ts],
-    ['round1Computed',    'FALSE',                                            'คำนวณรอบ 1 แล้ว',        ts],
-    ['round2Computed',    'FALSE',                                            'คำนวณรอบ 2 แล้ว',        ts],
-    ['resultsPublished',  'FALSE',                                            'เผยแพร่ผลในหน้า public', ts],
-    ['currentRound',      '1',                                                'รอบปัจจุบัน',             ts],
+  configSheet.getRange(2, 1, 7, 4).setValues([
+    ['eventName',         'การประกวดชุดต่อต้านยาเสพติด - โรงเรียนบ้านใหม่', 'ชื่องาน',                                                     ts],
+    ['eventDate',         '2026-06-26',                                      'วันจัดงาน (yyyy-mm-dd)',                                       ts],
+    ['votingOpen',        'FALSE',                                            'เปิดให้กรรมการลงคะแนน (กดปิด = auto-คำนวณ Hungarian)',           ts],
+    ['voteComputed',      'FALSE',                                            'คำนวณ Hungarian แล้ว',                                         ts],
+    ['resultsPublished',  'FALSE',                                            'เริ่ม TV reveal mode',                                          ts],
+    ['revealIndex',       '0',                                                'รางวัลที่ reveal แล้ว (0..N)',                                  ts],
+    ['revealedTeam',      'FALSE',                                            'ในรางวัลปัจจุบัน เปิดทีมแล้วหรือยัง',                            ts],
   ]);
 
-  Logger.log('Init complete. Sheets: ' + ss.getSheets().map(s => s.getName()).join(', '));
+  Logger.log('Init complete (V2). Sheets: ' + ss.getSheets().map(s => s.getName()).join(', '));
+  Logger.log('Seeded: 6 awards + 11 judges + 7 config keys');
 }
 
 /**
- * seedSampleData — เพิ่มข้อมูลตัวอย่าง (7 ทีม + 3+7 กรรมการ) สำหรับทดสอบ
- * เรียกหลัง initSpreadsheet() แล้ว
+ * seedSampleTeams — เพิ่มทีม 6 ทีมตัวอย่างสำหรับทดสอบ
+ * เรียกแยกหลัง initSpreadsheet ถ้าต้องการ
  */
-function seedSampleData() {
+function seedSampleTeams() {
   const ts = nowIso_();
   const teamsSheet = getSheet_('Teams');
-  const sampleTeams = [];
-  for (let i = 1; i <= 7; i++) {
-    sampleTeams.push([
-      'T' + String(i).padStart(2, '0'),
+  const rows = [];
+  for (let i = 1; i <= 6; i++) {
+    rows.push([
+      'T' + i,
       i,
       'ทีมตัวอย่าง ' + i,
       'โรงเรียนบ้านใหม่',
@@ -98,30 +116,6 @@ function seedSampleData() {
       ts,
     ]);
   }
-  teamsSheet.getRange(2, 1, sampleTeams.length, 10).setValues(sampleTeams);
-
-  const judgesSheet = getSheet_('Judges');
-  const sampleJudges = [];
-  let n = 1;
-  for (let r = 1; r <= 2; r++) {
-    const count = r === 1 ? 3 : 7;
-    for (let i = 1; i <= count; i++) {
-      const id = 'J' + String(n).padStart(2, '0');
-      const suffix = Utilities.getUuid().replace(/-/g, '').slice(0, 6);
-      sampleJudges.push([
-        id,
-        'กรรมการรอบ ' + r + ' คนที่ ' + i,
-        r,
-        'judge-r' + r + '-' + suffix,
-        false,
-        '',
-        true,
-        ts,
-      ]);
-      n++;
-    }
-  }
-  judgesSheet.getRange(2, 1, sampleJudges.length, 8).setValues(sampleJudges);
-
-  Logger.log('Seeded ' + sampleTeams.length + ' teams, ' + sampleJudges.length + ' judges');
+  teamsSheet.getRange(2, 1, rows.length, 10).setValues(rows);
+  Logger.log('Seeded ' + rows.length + ' sample teams');
 }

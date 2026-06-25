@@ -1,270 +1,287 @@
 /**
- * Results.gs — Dashboard, คำนวณรอบ 1/2, จัดการ Results sheet, publish
+ * Results.gs — Dashboard, คำนวณ Hungarian, TV Reveal state (V2)
+ *
+ * Flow:
+ *   1. Admin set Config.votingOpen=FALSE → Config.gs auto-trigger computeResults
+ *   2. Results sheet ได้รับ 6 แถวใหม่ (1 ทีม : 1 รางวัล)
+ *   3. Admin (optional) override swap ใน preview
+ *   4. Admin set resultsPublished=TRUE + revealIndex=0 → publishResults()
+ *   5. TV/Public หน้า results.html poll getRevealState ทุก 2 วินาที
+ *   6. Admin คลิก: เปิดผล / รางวัลถัดไป → setRevealState
  */
 
 function getDashboard(payload) {
   validateAdmin_(payload.token);
   const teams = getAllRows_('Teams').filter(t => t.Status !== 'Removed');
   const judges = getAllRows_('Judges').filter(j => toBool_(j.Active));
-
-  const r1 = judges.filter(j => Number(j.Round) === 1);
-  const r2 = judges.filter(j => Number(j.Round) === 2);
+  const voted = judges.filter(j => toBool_(j.Voted)).length;
 
   return {
     teamCount: teams.length,
     activeTeamCount: teams.filter(t => t.Status === 'Active').length,
-    winnerRound1: teams.find(t => t.Status === 'Winner-Round1') || null,
-    round1: {
-      total: r1.length,
-      voted: r1.filter(j => toBool_(j.Voted)).length,
-    },
-    round2: {
-      total: r2.length,
-      voted: r2.filter(j => toBool_(j.Voted)).length,
-    },
+    judgeCount: judges.length,
+    votedCount: voted,
     config: getConfigMap_(),
   };
 }
 
-/**
- * computeRound1 — รวมคะแนน + ตรวจ tiebreak
- * Tie key: (totalScore, rank1Count, rank2Count, rank3Count) desc
- */
-function computeRound1(payload) {
+/* ====================================================================
+ * COMPUTE — Hungarian Assignment
+ * ==================================================================== */
+
+function computeResults(payload) {
   validateAdmin_(payload.token);
-  const votes = getAllRows_('Round1Votes');
-  const teams = getAllRows_('Teams').filter(t => t.Status === 'Active');
-
-  const stats = teams.map(t => {
-    const tv = votes.filter(v => v.TeamID === t.TeamID);
-    return {
-      team: t,
-      totalScore: tv.reduce((s, v) => s + Number(v.Points || 0), 0),
-      rank1Count: tv.filter(v => Number(v.Rank) === 1).length,
-      rank2Count: tv.filter(v => Number(v.Rank) === 2).length,
-      rank3Count: tv.filter(v => Number(v.Rank) === 3).length,
-      voteCount: tv.length,
-    };
-  });
-
-  stats.sort((a, b) =>
-    b.totalScore - a.totalScore ||
-    b.rank1Count - a.rank1Count ||
-    b.rank2Count - a.rank2Count ||
-    b.rank3Count - a.rank3Count
-  );
-
-  const top = stats[0] || null;
-  const tied = top
-    ? stats.filter(s =>
-        s.totalScore === top.totalScore &&
-        s.rank1Count === top.rank1Count &&
-        s.rank2Count === top.rank2Count &&
-        s.rank3Count === top.rank3Count
-      )
-    : [];
-
-  return {
-    stats,
-    tied: tied.length > 1 ? tied.map(t => t.team) : null,
-    winner: tied.length === 1 ? top : null,
-  };
+  return withLock_(() => computeResultsInternal_());
 }
 
 /**
- * setRound1Winner — admin ยืนยันผู้ชนะ → mark Winner-Round1 + บันทึก Results
+ * computeResultsInternal_ — เรียกได้จาก setConfig auto-trigger ด้วย
+ * **ต้องเรียกใน lock อยู่แล้ว** (เพราะ setConfig ครอบ lock อีกชั้น)
  */
-function setRound1Winner(payload) {
-  validateAdmin_(payload.token);
-  const teamId = payload.teamId;
-  const note = payload.note || '';
-
-  return withLock_(() => {
-    const team = getAllRows_('Teams').find(t => t.TeamID === teamId);
-    if (!team) throw new Error('ไม่พบทีม');
-
-    // เคลียร์ Winner-Round1 เก่าก่อน (กรณี admin เปลี่ยนใจ)
-    const teamsSheet = getSheet_('Teams');
-    const teamHeaders = getHeaders_('Teams');
-    const allTeams = getAllRows_('Teams');
-    allTeams.forEach(t => {
-      if (t.Status === 'Winner-Round1') {
-        const idx = findRowIndex_('Teams', 'TeamID', t.TeamID);
-        teamsSheet.getRange(idx, teamHeaders.indexOf('Status') + 1).setValue('Active');
-      }
-    });
-
-    // ตั้ง winner ใหม่
-    const rowIdx = findRowIndex_('Teams', 'TeamID', teamId);
-    teamsSheet.getRange(rowIdx, teamHeaders.indexOf('Status') + 1).setValue('Winner-Round1');
-    teamsSheet.getRange(rowIdx, teamHeaders.indexOf('UpdatedAt') + 1).setValue(nowIso_());
-
-    // คำนวณ score
-    const votes = getAllRows_('Round1Votes').filter(v => v.TeamID === teamId);
-    const totalScore = votes.reduce((s, v) => s + Number(v.Points || 0), 0);
-
-    const award = getAllRows_('Awards').find(a => Number(a.Round) === 1);
-    if (!award) throw new Error('ไม่พบรางวัลรอบ 1 ใน Sheet Awards');
-
-    // เคลียร์ผลเก่ารอบ 1 → บันทึกใหม่
-    clearResultsForRound_(1);
-    appendResult_({
-      round: 1,
-      awardId: award.AwardID,
-      awardName: award.AwardName,
-      teamId: team.TeamID,
-      teamName: team.TeamName,
-      school: team.School,
-      imageUrl: team.ImageURL || '',
-      score: totalScore,
-      note,
-    });
-
-    setConfigKey_('round1Computed', 'TRUE');
-    return { winner: team, totalScore };
-  });
-}
-
-/**
- * computeRound2 — สร้าง vote matrix + run Hungarian → คืนการ assign
- * ยังไม่บันทึก Results — admin ต้องกด setRound2Results ก่อน
- */
-function computeRound2(payload) {
-  validateAdmin_(payload.token);
+function computeResultsInternal_() {
   const teams = getAllRows_('Teams')
     .filter(t => t.Status === 'Active')
     .sort((a, b) => Number(a.Order) - Number(b.Order));
   const awards = getAllRows_('Awards')
-    .filter(a => Number(a.Round) === 2)
     .sort((a, b) => Number(a.Order) - Number(b.Order));
-  const votes = getAllRows_('Round2Votes');
+  const votes = getAllRows_('Votes');
 
-  if (teams.length === 0) throw new Error('ไม่มีทีมที่เข้าแข่งรอบ 2');
+  if (teams.length === 0) throw new Error('ยังไม่มีทีม');
+  if (awards.length === 0) throw new Error('ยังไม่มีรางวัล');
   if (teams.length !== awards.length) {
     throw new Error('จำนวนทีม (' + teams.length + ') ต้องเท่ากับจำนวนรางวัล (' + awards.length + ')');
   }
 
   const n = teams.length;
-  // matrix[i][j] = จำนวน vote ของ team i ต่อ award j
+  // matrix[i][j] = vote count ของ team i ต่อ award j
   const matrix = teams.map(t =>
     awards.map(a =>
       votes.filter(v => v.TeamID === t.TeamID && v.AwardID === a.AwardID).length
     )
   );
-
-  // แปลงเป็น cost matrix (min cost) สำหรับ Hungarian
   const maxVal = Math.max(1, ...matrix.flat());
   const cost = matrix.map(row => row.map(v => maxVal - v));
+  const assignment = hungarian(cost);
 
-  const assignment = hungarian(cost); // assignment[i] = j (team i ได้ award j)
+  // เคลียร์ Results เก่า + เขียนใหม่
+  clearResultsSheet_();
+  const ts = nowIso_();
+  const sheet = getSheet_('Results');
+  const rows = teams.map((t, i) => {
+    const a = awards[assignment[i]];
+    const v = matrix[i][assignment[i]];
+    return [
+      'RES' + String(i + 1).padStart(3, '0'),
+      a.AwardID,
+      a.AwardName,
+      Number(a.Order),
+      t.TeamID,
+      t.TeamName,
+      t.School || '',
+      t.ImageURL || '',
+      v,
+      ts,
+      '',
+    ];
+  });
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+  }
 
-  const result = teams.map((t, i) => ({
-    team: t,
-    award: awards[assignment[i]],
-    voteCount: matrix[i][assignment[i]],
-  }));
-  const totalVotes = result.reduce((s, r) => s + r.voteCount, 0);
-
-  return { result, matrix, teams, awards, totalVotes };
+  setConfigKey_('voteComputed', 'TRUE');
+  return {
+    count: rows.length,
+    matrix,
+    teams,
+    awards,
+    assignment: rows.map(r => ({ awardId: r[1], awardName: r[2], teamId: r[4], teamName: r[5], voteCount: r[8] })),
+  };
 }
 
 /**
- * setRound2Results — admin ยืนยัน assignment → บันทึก Results
- * payload.assignments = [{ teamId, awardId, voteCount, note? }, ...]
+ * setResults — manual override จาก admin หลัง preview (click-to-swap)
+ *   payload.assignments = [{ awardId, teamId, voteCount, note }, ...]
  */
-function setRound2Results(payload) {
+function setResults(payload) {
   validateAdmin_(payload.token);
   const assignments = payload.assignments || [];
 
   return withLock_(() => {
-    clearResultsForRound_(2);
-
+    clearResultsSheet_();
     const teams = getAllRows_('Teams');
     const awards = getAllRows_('Awards');
+    const sheet = getSheet_('Results');
+    const ts = nowIso_();
 
-    assignments.forEach(a => {
+    const rows = assignments.map((a, i) => {
       const team = teams.find(t => t.TeamID === a.teamId);
       const award = awards.find(aw => aw.AwardID === a.awardId);
-      if (!team || !award) throw new Error('ข้อมูล assignment ไม่ถูกต้อง');
-      appendResult_({
-        round: 2,
-        awardId: award.AwardID,
-        awardName: award.AwardName,
-        teamId: team.TeamID,
-        teamName: team.TeamName,
-        school: team.School,
-        imageUrl: team.ImageURL || '',
-        score: Number(a.voteCount) || 0,
-        note: a.note || '',
-      });
+      if (!team || !award) throw new Error('assignment ไม่ถูกต้อง');
+      return [
+        'RES' + String(i + 1).padStart(3, '0'),
+        award.AwardID,
+        award.AwardName,
+        Number(award.Order),
+        team.TeamID,
+        team.TeamName,
+        team.School || '',
+        team.ImageURL || '',
+        Number(a.voteCount) || 0,
+        ts,
+        a.note || '',
+      ];
     });
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    }
 
-    setConfigKey_('round2Computed', 'TRUE');
-    return {};
+    setConfigKey_('voteComputed', 'TRUE');
+    return { count: rows.length };
   });
 }
 
 function getAdminResults(payload) {
   validateAdmin_(payload.token);
-  const results = getAllRows_('Results')
-    .sort((a, b) => Number(a.Round) - Number(b.Round));
+  const results = getAllRows_('Results').sort((a, b) =>
+    Number(a.AwardOrder) - Number(b.AwardOrder)
+  );
   return { results };
 }
 
-function getResults(_payload) {
-  const config = getConfigMap_();
-  if (!toBool_(config.resultsPublished)) return { published: false };
-  const results = getAllRows_('Results')
-    .sort((a, b) => Number(a.Round) - Number(b.Round));
-  return { published: true, results, eventName: config.eventName || '' };
-}
+/* ====================================================================
+ * PUBLISH + TV REVEAL STATE
+ * ==================================================================== */
 
 function publishResults(payload) {
   validateAdmin_(payload.token);
-  setConfigKey_('resultsPublished', 'TRUE');
-  return {};
+  return withLock_(() => {
+    setConfigKey_('resultsPublished', 'TRUE');
+    setConfigKey_('revealIndex', '0');
+    setConfigKey_('revealedTeam', 'FALSE');
+    return {};
+  });
 }
 
-/* ----- internal helpers ----- */
+function unpublishResults(payload) {
+  validateAdmin_(payload.token);
+  return withLock_(() => {
+    setConfigKey_('resultsPublished', 'FALSE');
+    setConfigKey_('revealIndex', '0');
+    setConfigKey_('revealedTeam', 'FALSE');
+    return {};
+  });
+}
 
-function clearResultsForRound_(round) {
-  const sheet = getSheet_('Results');
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return;
-  for (let i = values.length - 1; i >= 1; i--) {
-    if (Number(values[i][1]) === round) sheet.deleteRow(i + 1);
+function setRevealState(payload) {
+  validateAdmin_(payload.token);
+  const ri = payload.revealIndex;
+  const rt = payload.revealedTeam;
+
+  return withLock_(() => {
+    if (ri !== undefined && ri !== null) {
+      setConfigKey_('revealIndex', String(Number(ri)));
+    }
+    if (rt !== undefined && rt !== null) {
+      setConfigKey_('revealedTeam', rt ? 'TRUE' : 'FALSE');
+    }
+    return {};
+  });
+}
+
+function getRevealState(_payload) {
+  const c = getConfigMap_();
+  return {
+    published: toBool_(c.resultsPublished),
+    revealIndex: Number(c.revealIndex || 0),
+    revealedTeam: toBool_(c.revealedTeam),
+    totalAwards: getAllRows_('Awards').length,
+  };
+}
+
+/* ====================================================================
+ * PUBLIC RESULTS — filter ตาม revealIndex
+ * ==================================================================== */
+
+/**
+ * getResults — public
+ *
+ * คืนเฉพาะรางวัลที่ "ถูกเปิดเผยแล้ว" ตาม revealIndex
+ *   - awardOrder > revealIndex                → ซ่อนทั้งใบ
+ *   - awardOrder == revealIndex, revealedTeam=FALSE → ส่งเฉพาะ AwardName
+ *   - awardOrder == revealIndex, revealedTeam=TRUE  → ส่งทั้งหมด
+ *   - awardOrder < revealIndex                → ส่งทั้งหมด (เปิดไปแล้ว)
+ */
+function getResults(_payload) {
+  const c = getConfigMap_();
+  const totalAwards = getAllRows_('Awards').length;
+  if (!toBool_(c.resultsPublished)) {
+    return { published: false, revealIndex: 0, totalAwards };
   }
+
+  const revealIndex = Number(c.revealIndex || 0);
+  const revealedTeam = toBool_(c.revealedTeam);
+  const all = getAllRows_('Results').sort((a, b) =>
+    Number(a.AwardOrder) - Number(b.AwardOrder)
+  );
+
+  const visible = all.map(r => {
+    const order = Number(r.AwardOrder);
+    if (order > revealIndex) return null;
+    if (order === revealIndex && !revealedTeam) {
+      // เปิดเฉพาะชื่อรางวัล
+      return {
+        AwardID: r.AwardID,
+        AwardName: r.AwardName,
+        AwardOrder: order,
+        teamRevealed: false,
+      };
+    }
+    // เปิดทั้งใบ
+    return {
+      AwardID: r.AwardID,
+      AwardName: r.AwardName,
+      AwardOrder: order,
+      TeamID: r.TeamID,
+      TeamName: r.TeamName,
+      School: r.School,
+      ImageURL: r.ImageURL,
+      VoteCount: Number(r.VoteCount || 0),
+      teamRevealed: true,
+    };
+  }).filter(Boolean);
+
+  return {
+    published: true,
+    revealIndex,
+    revealedTeam,
+    totalAwards,
+    results: visible,
+    eventName: c.eventName || '',
+  };
 }
 
-function appendResult_(r) {
+/* ====================================================================
+ * HELPERS
+ * ==================================================================== */
+
+function clearResultsSheet_() {
   const sheet = getSheet_('Results');
-  const existing = getAllRows_('Results');
-  const nextNum = existing.length + 1;
-  sheet.appendRow([
-    'RES' + String(nextNum).padStart(3, '0'),
-    r.round,
-    r.awardId,
-    r.awardName,
-    r.teamId,
-    r.teamName,
-    r.school,
-    r.imageUrl,
-    r.score,
-    nowIso_(),
-    r.note || '',
-  ]);
+  const last = sheet.getLastRow();
+  if (last < 2) return;
+  sheet.getRange(2, 1, last - 1, sheet.getLastColumn()).clearContent();
 }
 
-/* ----- Export ----- */
+/* ====================================================================
+ * EXPORT
+ * ==================================================================== */
 
 function exportData(payload) {
   validateAdmin_(payload.token);
   return {
     teams: getAllRows_('Teams'),
-    judges: getAllRows_('Judges'), // ส่ง token เต็มสำหรับ admin
+    judges: getAllRows_('Judges'),
     awards: getAllRows_('Awards'),
-    round1Votes: getAllRows_('Round1Votes'),
-    round2Votes: getAllRows_('Round2Votes'),
+    votes: getAllRows_('Votes'),
     results: getAllRows_('Results'),
     config: getAllRows_('Config'),
   };

@@ -1,10 +1,16 @@
 /**
- * Judges.gs — CRUD กรรมการ + token management
+ * Judges.gs — CRUD กรรมการ (V2)
+ *
+ * V2: ลบ Round/Token/resetJudgeToken ทิ้ง
+ *     ใช้ Order แทน Round (ลำดับแสดงในรายการเลือกชื่อ)
+ *     กรรมการ identify ผ่าน JudgeID (ไม่มี secret)
  */
 
 function getJudges(payload) {
   validateAdmin_(payload.token);
-  const judges = getAllRows_('Judges').filter(j => toBool_(j.Active));
+  const judges = getAllRows_('Judges')
+    .filter(j => toBool_(j.Active))
+    .sort((a, b) => Number(a.Order) - Number(b.Order));
   return { judges };
 }
 
@@ -17,9 +23,9 @@ function saveJudge(payload) {
     const headers = getHeaders_('Judges');
 
     if (judge.JudgeID) {
+      // update — อนุญาตเฉพาะชื่อ
       const rowIdx = findRowIndex_('Judges', 'JudgeID', judge.JudgeID);
       if (rowIdx === -1) throw new Error('ไม่พบกรรมการ');
-      // อนุญาตให้แก้ชื่อเท่านั้น (ไม่ให้แก้ Round เพราะกระทบ token)
       if (judge.JudgeName !== undefined) {
         sheet.getRange(rowIdx, headers.indexOf('JudgeName') + 1).setValue(judge.JudgeName);
       }
@@ -27,25 +33,26 @@ function saveJudge(payload) {
     }
 
     // สร้างใหม่
-    const round = Number(judge.Round) || 1;
-    if (round !== 1 && round !== 2) throw new Error('Round ต้องเป็น 1 หรือ 2');
-
     const existing = getAllRows_('Judges');
-    const nextNum = existing.length + 1;
-    const judgeId = 'J' + String(nextNum).padStart(2, '0');
-    const token = generateJudgeToken_(round);
+    // gen JudgeID ตามเลขสูงสุด + 1 (กัน ID ซ้ำเมื่อมีการลบไป)
+    const maxNum = existing.reduce((m, j) => {
+      const n = parseInt(String(j.JudgeID).replace('J', ''), 10) || 0;
+      return n > m ? n : m;
+    }, 0);
+    const judgeId = 'J' + String(maxNum + 1).padStart(2, '0');
+    const order = existing.length === 0
+      ? 1
+      : Math.max.apply(null, existing.map(j => Number(j.Order) || 0)) + 1;
 
     sheet.appendRow([
       judgeId,
       judge.JudgeName || '',
-      round,
-      token,
-      false,
-      '',
-      true,
-      nowIso_(),
+      order,
+      false,    // Voted
+      '',       // VotedAt
+      true,     // Active
     ]);
-    return { judgeId, token };
+    return { judgeId };
   });
 }
 
@@ -59,52 +66,40 @@ function deleteJudge(payload) {
     const sheet = getSheet_('Judges');
     const headers = getHeaders_('Judges');
     sheet.getRange(rowIdx, headers.indexOf('Active') + 1).setValue(false);
-    // ลบคะแนนที่ลงไว้แล้วด้วย
-    const judge = getAllRows_('Judges').find(j => j.JudgeID === judgeId);
-    if (judge) deleteJudgeVotes_(judgeId, Number(judge.Round));
+    // ลบ vote ที่กรรมการคนนี้ลงไว้
+    deleteJudgeVotes_(judgeId);
+    // และ reset Voted=FALSE
+    sheet.getRange(rowIdx, headers.indexOf('Voted') + 1).setValue(false);
+    sheet.getRange(rowIdx, headers.indexOf('VotedAt') + 1).setValue('');
     return {};
   });
 }
 
-function resetJudgeToken(payload) {
+function reorderJudges(payload) {
   validateAdmin_(payload.token);
-  const judgeId = payload.judgeId;
+  const judgeIds = payload.judgeIds || [];
 
   return withLock_(() => {
-    const rowIdx = findRowIndex_('Judges', 'JudgeID', judgeId);
-    if (rowIdx === -1) throw new Error('ไม่พบกรรมการ');
-    const judge = getAllRows_('Judges').find(j => j.JudgeID === judgeId);
-    const round = Number(judge.Round);
-    const newToken = generateJudgeToken_(round);
-
     const sheet = getSheet_('Judges');
     const headers = getHeaders_('Judges');
-    sheet.getRange(rowIdx, headers.indexOf('Token') + 1).setValue(newToken);
-    sheet.getRange(rowIdx, headers.indexOf('Voted') + 1).setValue(false);
-    sheet.getRange(rowIdx, headers.indexOf('VotedAt') + 1).setValue('');
-
-    deleteJudgeVotes_(judgeId, round);
-    return { token: newToken };
+    const orderCol = headers.indexOf('Order') + 1;
+    judgeIds.forEach((id, i) => {
+      const rowIdx = findRowIndex_('Judges', 'JudgeID', id);
+      if (rowIdx > 0) sheet.getRange(rowIdx, orderCol).setValue(i + 1);
+    });
+    return {};
   });
 }
 
-function generateJudgeToken_(round) {
-  // 6-hex สั้นพอที่จะจำได้ + พิมพ์ใหม่ได้, ตรวจซ้ำกับฐานเดิม
-  const existingTokens = new Set(getAllRows_('Judges').map(j => j.Token));
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const suffix = Utilities.getUuid().replace(/-/g, '').slice(0, 6);
-    const token = 'judge-r' + round + '-' + suffix;
-    if (!existingTokens.has(token)) return token;
-  }
-  throw new Error('สร้าง token ไม่สำเร็จ (ลองใหม่)');
-}
+/* ====================================================================
+ * INTERNAL
+ * ==================================================================== */
 
-function deleteJudgeVotes_(judgeId, round) {
-  const sheetName = round === 1 ? 'Round1Votes' : 'Round2Votes';
-  const sheet = getSheet_(sheetName);
+function deleteJudgeVotes_(judgeId) {
+  const sheet = getSheet_('Votes');
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return;
-  // col B (index 1) = JudgeID — ลบจากล่างขึ้นบน
+  // col B (index 1) = JudgeID
   for (let i = values.length - 1; i >= 1; i--) {
     if (String(values[i][1]) === String(judgeId)) sheet.deleteRow(i + 1);
   }
