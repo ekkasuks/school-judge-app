@@ -99,7 +99,16 @@ function uploadImage(payload) {
   const bytes = Utilities.base64Decode(payload.base64);
   const blob = Utilities.newBlob(bytes, payload.mimeType || 'image/jpeg', payload.filename || 'team.jpg');
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // setSharing อาจ fail ใน Google Workspace ที่ admin ปิด external sharing —
+  // ปล่อยผ่าน เพราะ folder ที่ user แชร์เป็น "Anyone with link" อยู่แล้ว
+  // จะ inherit permission ให้ไฟล์โดยอัตโนมัติ
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    Logger.log('setSharing fallback to folder inherit: ' + e.message);
+  }
+
   const fileId = file.getId();
   return {
     fileId,
