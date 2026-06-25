@@ -277,7 +277,7 @@ function renderVoteCurrent() {
         <input type="radio" name="vote-team" value="${esc(t.TeamID)}" ${picked === t.TeamID ? 'checked' : ''}
                class="h-5 w-5 text-sky-600 focus:ring-sky-500">
         ${t.ImageURL
-          ? `<img src="${esc(t.ImageURL)}" class="h-12 w-12 rounded-lg object-cover" loading="lazy">`
+          ? `<img src="${esc(driveImageUrl(t.ImageURL))}" class="h-12 w-12 rounded-lg object-cover" loading="lazy">`
           : `<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400">📷</div>`}
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1">

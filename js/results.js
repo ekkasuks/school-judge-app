@@ -155,7 +155,7 @@ function render(stateName, prev) {
         </div>
         <div class="scale-in mt-6 flex flex-col items-center">
           ${current.ImageURL
-            ? `<img src="${esc(current.ImageURL)}" class="h-56 w-56 rounded-3xl object-cover shadow-2xl ring-4 ring-amber-300 sm:h-72 sm:w-72">`
+            ? `<img src="${esc(driveImageUrl(current.ImageURL))}" class="h-56 w-56 rounded-3xl object-cover shadow-2xl ring-4 ring-amber-300 sm:h-72 sm:w-72">`
             : `<div class="flex h-56 w-56 items-center justify-center rounded-3xl bg-slate-800 text-7xl ring-4 ring-amber-300 sm:h-72 sm:w-72">📷</div>`}
           <p class="mt-6 text-3xl font-extrabold text-white sm:text-5xl text-glow-gold">${esc(current.TeamName)}</p>
           <p class="mt-2 text-base text-amber-100/80 sm:text-xl">${esc(current.School || '')}</p>
@@ -189,7 +189,7 @@ function render(stateName, prev) {
                 <p class="text-xs font-semibold text-amber-200">🏆 ${esc(r.AwardName)}</p>
                 <div class="mt-2 flex items-center gap-3">
                   ${r.ImageURL
-                    ? `<img src="${esc(r.ImageURL)}" class="h-14 w-14 rounded-xl object-cover ring-2 ring-amber-300">`
+                    ? `<img src="${esc(driveImageUrl(r.ImageURL))}" class="h-14 w-14 rounded-xl object-cover ring-2 ring-amber-300">`
                     : `<div class="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-2xl">📷</div>`}
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-base font-bold text-white">${esc(r.TeamName)}</p>

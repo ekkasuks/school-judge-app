@@ -185,7 +185,7 @@ function renderTeams() {
     <li data-team-id="${esc(t.TeamID)}" class="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm">
       <span class="drag-handle text-slate-400 text-xl">☰</span>
       ${t.ImageURL
-        ? `<img src="${esc(t.ImageURL)}" class="h-12 w-12 rounded-lg object-cover" loading="lazy">`
+        ? `<img src="${esc(driveImageUrl(t.ImageURL))}" class="h-12 w-12 rounded-lg object-cover" loading="lazy">`
         : `<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400">📷</div>`}
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
@@ -248,7 +248,7 @@ function openTeamModal(team) {
   const preview = $('#team-image-preview');
   if (team?.ImageURL) {
     preview.classList.remove('hidden');
-    preview.querySelector('img').src = team.ImageURL;
+    preview.querySelector('img').src = driveImageUrl(team.ImageURL);
   } else {
     preview.classList.add('hidden');
   }
@@ -539,7 +539,7 @@ function renderResultSaved() {
             <div class="text-xs font-semibold text-sky-700">🏆 ${esc(r.AwardName)}</div>
             <div class="mt-2 flex items-center gap-2">
               ${r.ImageURL
-                ? `<img src="${esc(r.ImageURL)}" class="h-10 w-10 rounded-lg object-cover">`
+                ? `<img src="${esc(driveImageUrl(r.ImageURL))}" class="h-10 w-10 rounded-lg object-cover">`
                 : `<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-slate-400">📷</div>`}
               <div class="flex-1 min-w-0">
                 <div class="truncate text-sm font-bold text-slate-800">${esc(r.TeamName)}</div>
@@ -661,7 +661,7 @@ function renderResultPreview() {
                 class="result-swap-btn flex w-full items-center gap-3 rounded-xl p-3 text-left ring-1 active:scale-[0.99]
                        ${isPicked ? 'bg-amber-50 ring-amber-400' : a.overridden ? 'bg-rose-50 ring-rose-200' : 'bg-white ring-slate-200'}">
           ${t?.ImageURL
-            ? `<img src="${esc(t.ImageURL)}" class="h-12 w-12 rounded-lg object-cover">`
+            ? `<img src="${esc(driveImageUrl(t.ImageURL))}" class="h-12 w-12 rounded-lg object-cover">`
             : `<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400">📷</div>`}
           <div class="flex-1 min-w-0">
             <div class="truncate text-xs font-semibold text-sky-700">🏆 ${esc(aw?.AwardName || '?')}</div>

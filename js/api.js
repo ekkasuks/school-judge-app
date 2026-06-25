@@ -87,6 +87,28 @@ function fileToBase64(file) {
   });
 }
 
+/* ----- Google Drive image URL normalizer ----- */
+
+/**
+ * driveImageUrl — แปลง URL ของรูปจาก Drive ให้เป็นรูปแบบ thumbnail ที่ embed ใน <img> ได้
+ * รองรับ legacy format ที่อาจอยู่ใน Sheet เก่า:
+ *   - https://drive.google.com/uc?export=view&id=FILEID
+ *   - https://drive.google.com/file/d/FILEID/view
+ *   - https://drive.google.com/open?id=FILEID
+ *   - https://lh3.googleusercontent.com/d/FILEID
+ *   - หรือ thumbnail URL อยู่แล้ว → ปล่อยผ่าน
+ * URL ภายนอก (ไม่ใช่ Drive) → ปล่อยผ่าน
+ */
+function driveImageUrl(url, size = 800) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (!/drive\.google\.com|googleusercontent\.com/.test(s)) return s;
+  // ดึง fileId (Drive ใช้ 25+ ตัวอักษร a-z A-Z 0-9 _ -)
+  const m = s.match(/[-\w]{25,}/);
+  if (!m) return s;
+  return `https://drive.google.com/thumbnail?id=${m[0]}&sz=w${size}`;
+}
+
 /* ----- escape HTML ----- */
 
 function esc(s) {

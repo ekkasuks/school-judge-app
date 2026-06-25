@@ -112,6 +112,8 @@ function uploadImage(payload) {
   const fileId = file.getId();
   return {
     fileId,
-    url: 'https://drive.google.com/uc?export=view&id=' + fileId,
+    // ใช้ thumbnail URL — embed ใน <img> ได้เสถียรกว่า uc?export=view
+    // (Google บล็อก uc?export ในหลาย account ทำให้รูปไม่โหลด)
+    url: 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800',
   };
 }
