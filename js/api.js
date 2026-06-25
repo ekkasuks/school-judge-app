@@ -124,9 +124,8 @@ function confirmDialog(message, { confirmText = 'ยืนยัน', cancelText
 
 /* ----- block UI overlay ----- */
 
-let _blockCount = 0;
 function showBlocker(text = 'กำลังทำงาน...') {
-  _blockCount++;
+  // ไม่ใช้ counter — เรียกซ้ำได้ จะแค่ update ข้อความ
   let el = document.getElementById('app-blocker');
   if (!el) {
     el = document.createElement('div');
@@ -144,8 +143,5 @@ function showBlocker(text = 'กำลังทำงาน...') {
   document.getElementById('app-blocker-text').textContent = text;
 }
 function hideBlocker() {
-  _blockCount = Math.max(0, _blockCount - 1);
-  if (_blockCount === 0) {
-    document.getElementById('app-blocker')?.remove();
-  }
+  document.getElementById('app-blocker')?.remove();
 }
